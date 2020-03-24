@@ -35,7 +35,7 @@ pBind    = pIdent <|> symbol "_"
 
 keyword :: String -> Bool
 keyword x =
-  x == "let" || x == "in" || x == "λ" || x == "U" || x == "assume"
+  x == "let" || x == "in" || x == "λ" || x == "U"
 
 pIdent :: Parser Name
 pIdent = try $ do
