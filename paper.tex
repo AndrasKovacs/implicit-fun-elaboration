@@ -230,7 +230,7 @@ $\kw{@}id\,bool\,true$, and in GHC we can enable the language extension
 $\mathsf{TypeApplications}$ \cite{eisenberg2016visible} and write
 $id\,\kw{@}Bool\,True$.
 
-Implicit functions are \textbf{first-class} if they can be manipulated like any
+Implicit function types are \textbf{first-class} if they can be manipulated like any
 other type. Coq is an example for a system where this is \emph{not} the case.
 In Coq, the core language does not have an actual implicit function type,
 instead, implicitness is tied to particular \emph{names}, and while we can write
@@ -530,7 +530,7 @@ type operators or functions with crisp (``meta'') domain. The non-meta typing
 context additionally supports \emph{defined variables}, which is used in the
 typing rule for $\slet$-definitions, and we have that any defined variable is
 equal to its definition. We support $\slet$ as a convenience feature which
-is important for defining more involved example programs\footnote{In dependent type theories, the $\slet$ rule is not
+is important for defining more involved example programs\footnote{In presentations of dependent type theories without explicit substitutions, the $\slet$ rule is not
   derivable from function application, unlike in simple type theories.}.
 
 The universe $\U$ is Russell-style, and we have the type-in-type rule.
@@ -644,8 +644,7 @@ and similarly to \cite{gundry2013type}, we do not have a first-class notion of
 contextual types, and instead reuse the standard dependent function type to
 abstract over enclosing contexts.
 
-\begin{definition}[Closing type]\label{def:closingtype} For each $\Theta|\Gamma \vdash A : \U$, we define
-$\Gamma \To A$ by recursion on $\Gamma$, such that $\Theta|\emptycon\vdash
+\begin{definition}[Closing type]\label{def:closingtype} For each $\Theta|\Gamma \vdash A : \U$, we define a term $\Gamma \To A$ by recursion on $\Gamma$, such that $\Theta|\emptycon\vdash
   \Gamma \To A : \U$.
   \begin{alignat*}{3}
     &((\Gamma,\, x : A) \To B)     && :\equiv (\Gamma \To ((x : A) \to B))\\
@@ -660,8 +659,8 @@ $\overline{\mathsf{vars}_{\Gamma}}$ such that that $\Theta|\Gamma\vdash
 t\,\overline{\mathsf{vars}_{\Gamma}} : A$, which is $t$ applied to all bound
 variables in $\Gamma$.
   \begin{alignat*}{3}
-    &(t\,\overline{\mathsf{vars}_{\Gamma,\,x:A}})   && :\equiv (t\,\overline{\mathsf{vars}_{\Gamma}})\,x \\
-    &(t\,\overline{\mathsf{vars}_{\Gamma,\,x:A=t}}) && :\equiv (t\,\overline{\mathsf{vars}_{\Gamma}}) \\
+    &(t\,\overline{\mathsf{vars}_{\Gamma,\,x:B}})   && :\equiv (t\,\overline{\mathsf{vars}_{\Gamma}})\,x \\
+    &(t\,\overline{\mathsf{vars}_{\Gamma,\,x:B=u}}) && :\equiv (t\,\overline{\mathsf{vars}_{\Gamma}}) \\
     &(t\,\overline{\mathsf{vars}_{\emptycon}})     && :\equiv t
   \end{alignat*}
 \end{definition}
@@ -779,7 +778,7 @@ We present the specifications and definitions below, then we describe them in or
   &\quad(\Theta_2,\,\theta_2,\,t') \leftarrow \echeck{t}
                 {\Theta_1}{\Gamma[\theta_1]}{A'}\\
   &\quad(\Theta_3,\,\theta_3,\,u') \leftarrow
-                \echeck{u}{\Theta_2}{\Gamma[\theta_{12}]}{(B[\theta_{12}])}\\
+                \echeck{u}{\Theta_2}{\Gamma[\theta_{12}],\,x:A'[\theta_2]\,=\,t'}{(B[\theta_{12}])}\\
   &\quad\ereturn\,(\Theta_3,\,\theta_{123},\,\slet\,x:A'[\theta_{23}]=t'[\theta_3]\,\sin\,u')\\
   &\echeck{\_}{\Theta}{\Gamma}{A} :\equiv \edo \\
   &\quad\ereturn\,(\freshMeta{\Theta}{\Gamma}{A})\\
@@ -832,7 +831,7 @@ We present the specifications and definitions below, then we describe them in or
   &\quad(\Theta_2,\,\theta_2,\,t') \leftarrow \echeck{t}
                 {\Theta_1}{\Gamma[\theta_1]}{A'}\\
   &\quad(\Theta_3,\,\theta_3,\,u',\,B) \leftarrow
-                \einfer{u}{\Theta_2}{\Gamma[\theta_{12}]}\\
+                \einfer{u}{\Theta_2}{\Gamma[\theta_{12}],\,x:A'[\theta_2]\,=\,t'}\\
   &\quad\ereturn\,(\Theta_3,\,\theta_{123},\,(\slet\,x:A'[\theta_{23}]=t'[\theta_3]\,\sin\,u'),\,B)\\
   &\einfer{\_}{\Theta}{\Gamma} :\equiv \edo \\
   &\quad \slet\,(\Theta',\,\theta,\,A) = \freshMeta{\Theta}{\Gamma}{\U}\\
