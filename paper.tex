@@ -210,8 +210,8 @@ try filling in details on its own.
 compiler that particular function arguments should be inferred by default. In
 Agda and Coq, one can use bracketed function domains for this purpose:
 \begin{alignat*}{3}
-  & id : \{A : \kw{Set}\}\to A \to A \hspace{5em} \kw{Definition}\,id\,\{A : \kw{Type}\}(x : A) := x.\\
-  & id\,x = x
+  & \mi{id} : \{A : \kw{Set}\}\to A \to A \hspace{5em} \kw{Definition}\,\mi{id}\,\{A : \kw{Type}\}(x : A) := x.\\
+  & \mi{id}\,x = x
 \end{alignat*}
 In GHC, one can use $\kw{forall}$ to define implicit function
 types\footnote{This notation requires language extensions
@@ -222,25 +222,25 @@ types\footnote{This notation requires language extensions
   & id\,x = x
 \end{alignat*}
 In all of the above cases, if we apply $id$ to an argument, the implicit type
-argument is provided by elaboration. For example, in Agda, $id\,true$ is
-elaborated to $id\,\{Bool\}\,true$, and analogously in GHC and Coq. In all three
+argument is provided by elaboration. For example, in Agda, $\mi{id}\,\mi{true}$ is
+elaborated to $\mi{id}\,\{\mi{Bool}\}\,\mi{true}$, and analogously in GHC and Coq. In all three
 systems, there is also a way to explicitly specify implicit arguments: in Agda
 we may put arguments in brackets as we have seen, in Coq we can prefix a name
 with $\kw{@}$ to make every implicit argument explicit, as in
-$\kw{@}id\,bool\,true$, and in GHC we can enable the language extension
+$\kw{@}\mi{id}\,\mi{bool}\,\mi{true}$, and in GHC we can enable the language extension
 $\mathsf{TypeApplications}$ \cite{eisenberg2016visible} and write
-$id\,\kw{@}Bool\,True$.
+$\mi{id}\,\kw{@}\mi{Bool}\,\mi{True}$.
 
 Implicit function types are \textbf{first-class} if they can be manipulated like any
 other type. Coq is an example for a system where this is \emph{not} the case.
 In Coq, the core language does not have an actual implicit function type,
 instead, implicitness is tied to particular \emph{names}, and while we can write
-$list\,(\kw{forall}\,\{A : \kw{Type}\},\,A\to A)$ for a list type with
+$\mi{list}\,(\kw{forall}\,\{A : \kw{Type}\},\,A\to A)$ for a list type with
 polymorphic elements, the brackets here are simply ignored by Coq. For example,
 Coq accepts the following definition:
 \begin{alignat*}{3}
-  & \kw{Definition}\,poly\,: \kw{forall}\,(f : \kw{forall}\,\{A : \kw{Type}\},\,A\to A),\,bool\,*\,nat :=\\
-  & \quad \kw{fun}\,f \Rightarrow (f\,bool\,true,\,f\,nat\,0)
+  & \kw{Definition}\,poly\,: \kw{forall}\,(f : \kw{forall}\,\{A : \kw{Type}\},\,A\to A),\,\mi{bool}\,*\,\mi{nat} :=\\
+  & \quad \kw{fun}\,f \Rightarrow (f\,\mi{bool}\,\mi{true},\,f\,\mi{nat}\,0)
 \end{alignat*}
 This is a higher-rank polymorphic function which returns a pair. Note that $f$
 is applied to two arguments, because the implicitness in $\kw{forall}\,\{A :
@@ -249,8 +249,8 @@ is applied to two arguments, because the implicitness in $\kw{forall}\,\{A :
 In GHC Haskell, $\kw{forall}$ types are more flexible. We can write the
 following, with $\kw{RankNTypes}$ enabled:
 \begin{alignat*}{3}
-  & poly :: (\kw{forall}\,a.\,a \to a) \to (Bool,\,Int) \\
-  & poly\,f = (f\,True,\,f\,0)
+  & \mi{poly} :: (\kw{forall}\,a.\,a \to a) \to (\mi{Bool},\,\mi{Int}) \\
+  & \mi{poly}\,f = (f\,\mi{True},\,f\,0)
 \end{alignat*}
 However, polymorphic types are only supported in function domains and as fields
 of algebraic data constructors. We cannot instantiate an arbitrary type
@@ -265,10 +265,10 @@ still has limitations when it comes to handling implicit functions. Assume that
 we have $[]$ for the empty list and $\blank::\blank$ for list extension,
 and consider the following code:
 \begin{alignat*}{3}
-  & polyList : List\,(\{A : \kw{Set}\}\to A \to A)\\
-  & polyList = (\lambda\,x \to x)\,::\,[]
+  & \mi{polyList} : List\,(\{A : \kw{Set}\}\to A \to A)\\
+  & \mi{polyList} = (\lambda\,x \to x)\,::\,[]
 \end{alignat*}
-Agda 2.6.0.1 does not accept this. However, it does accept $polyList =
+Agda 2.6.0.1 does not accept this. However, it does accept $\mi{polyList} =
 (\lambda\,\{A\}\,x \to x)\,::\,[]$. The issue is the following. Agda first
 infers a type for $(\lambda\,x \to x)\,::\,[]$, then tries to unify the
 inferred type with the given $List\,(\{A : \kw{Set}\}\to A \to A)$
@@ -492,9 +492,10 @@ variables pointing into it. This corresponds to a particularly simple variant of
 type operators or functions with crisp (``meta'') domain. The non-meta typing
 context additionally supports \emph{defined variables}, which is used in the
 typing rule for $\slet$-definitions, and we have that any defined variable is
-equal to its definition. We support $\slet$ as a convenience feature which
-is important for defining more involved example programs\footnote{In presentations of dependent type theories without explicit substitutions, the $\slet$ rule is not
-  derivable from function application, unlike in simple type theories.}.
+equal to its definition. We support $\slet$ as a convenience feature which is
+important for defining more involved example programs\footnote{In presentations
+  of dependent type theories without explicit substitutions, the $\slet$ rule is
+  not derivable from function application, unlike in simple type theories.}.
 
 The universe $\U$ is Russell-style, and we have the type-in-type rule.
 This causes our core syntax to be non-total, and our elaboration algorithm to be
@@ -588,7 +589,7 @@ meta creation or solution of a meta).
 \begin{itemize}
   \item
     A metasubstitution $\theta : \Theta_0 \To \Theta_1$ assigns to each variable
-    in $\Theta_1$ a term in $\Theta_0$ , hence it is represented as a list of
+    in $\Theta_1$ a term in $\Theta_0$, hence it is represented as a list of
     terms $(\alpha_1 \mapsto t_1,\,...\,\,\alpha_i \mapsto t_i)$.
   \item
     We define the action of a metasubstitution on contexts and terms by
@@ -1493,23 +1494,23 @@ some examples of the algorithm in action.
 We return to the $\mi{polyList}$ example from Section \ref{sec:issues}. We trace
 elaboration using the extended algorithm.
 \begin{alignat*}{3}
-  & \scriptstyle{0 }\qquad\qquad && \echeckt{cons\,(\lambda\,x.\,x)\,nil}{(List\,(\{A : \U\}\to A \to A))}
+  & \scriptstyle{0 }\qquad\qquad && \echeckt{\mi{cons}\,(\lambda\,x.\,x)\,\mi{nil}}{(\mi{List}\,(\{A : \U\}\to A \to A))}
       \hspace{14em}\\
-  & \scriptstyle{1 }  && \quad \einfert{cons\,(\lambda\,x.\,x)\,nil} \\
-  & \scriptstyle{2 }  && \qquad \einfert{cons\,(\lambda\,x.\,x)} \\
-  & \scriptstyle{3 }  && \qquad\quad \einfert{cons}\\
-  & \scriptstyle{4 }  && \qquad\quad = cons\,\{\alpha_0\}\,:\,\alpha_0 \to List\,\alpha_0 \to List\,\alpha_0\\
+  & \scriptstyle{1 }  && \quad \einfert{\mi{cons}\,(\lambda\,x.\,x)\,\mi{nil}} \\
+  & \scriptstyle{2 }  && \qquad \einfert{\mi{cons}\,(\lambda\,x.\,x)} \\
+  & \scriptstyle{3 }  && \qquad\quad \einfert{\mi{cons}}\\
+  & \scriptstyle{4 }  && \qquad\quad = \mi{cons}\,\{\alpha_0\}\,:\,\alpha_0 \to \mi{List}\,\alpha_0 \to \mi{List}\,\alpha_0\\
   & \scriptstyle{5 }  && \qquad\quad \echeckt{\lambda\,x.\,x}{\alpha_0}\\
   & \scriptstyle{6 }  && \qquad\quad = \lambda\,\{y : \ol{\alpha_1}\}.\,\lambda\,x.\,x\\
-  & \scriptstyle{7 }  && \qquad = cons\,
+  & \scriptstyle{7 }  && \qquad = \mi{cons}\,
                        \{\{y : \ol{\alpha_1}\} \to \alpha_2\,\{y : \ol{\alpha_1}\}\to \alpha_2\,\{y : \ol{\alpha_1}\}\}\,
                        (\lambda\,\{y : \ol{\alpha_1}\}.\,\lambda\,x.\,x)\\
-  & \scriptstyle{8 }  && \qquad \echeckt{nil}{(List\,(\{y : \ol{\alpha_1}\} \to \alpha_2\,\{y : \ol{\alpha_1}\}\to \alpha_2\,\{y : \ol{\alpha_1}\}))}\\
-  & \scriptstyle{9 }  && \qquad = nil\,\{\{y : \ol{\alpha_1}\} \to \alpha_2\,\{y : \ol{\alpha_1}\}\to \alpha_2\,\{y : \ol{\alpha_1}\}\}\\
-                       & \scriptstyle{10} && \quad = cons\,\{\{y : \ol{\alpha_1}\} \to \alpha_2\,\{y : \ol{\alpha_1}\}\to \alpha_2\,\{y : \ol{\alpha_1}\}\}\,(\lambda\,\{y : \ol{\alpha_1}\}.\,\lambda\,x.\,x)\,\\
-                       & && \hspace{4.4em} (nil\,\{\{y : \ol{\alpha_1}\} \to \alpha_2\,\{y : \ol{\alpha_1}\}\to \alpha_2\,\{y : \ol{\alpha_1}\}\})\\
-  & && \hspace{3em} : List\,(\{y : \ol{\alpha_1}\} \to \alpha_2\,\{y : \ol{\alpha_1}\}\to \alpha_2\,\{y : \ol{\alpha_1}\})\\
-  & \scriptstyle{11} && \quad \unify\,(List\,(\{A : \U\}\to A \to A))\,(List\,(\{y : \ol{\alpha_1}\} \to \alpha_2\,\{y : \ol{\alpha_1}\}\to \alpha_2\,\{y : \ol{\alpha_1}\}))\\
+  & \scriptstyle{8 }  && \qquad \echeckt{\mi{nil}}{(\mi{List}\,(\{y : \ol{\alpha_1}\} \to \alpha_2\,\{y : \ol{\alpha_1}\}\to \alpha_2\,\{y : \ol{\alpha_1}\}))}\\
+  & \scriptstyle{9 }  && \qquad = \mi{nil}\,\{\{y : \ol{\alpha_1}\} \to \alpha_2\,\{y : \ol{\alpha_1}\}\to \alpha_2\,\{y : \ol{\alpha_1}\}\}\\
+                       & \scriptstyle{10} && \quad = \mi{cons}\,\{\{y : \ol{\alpha_1}\} \to \alpha_2\,\{y : \ol{\alpha_1}\}\to \alpha_2\,\{y : \ol{\alpha_1}\}\}\,(\lambda\,\{y : \ol{\alpha_1}\}.\,\lambda\,x.\,x)\,\\
+                       & && \hspace{4.4em} (\mi{nil}\,\{\{y : \ol{\alpha_1}\} \to \alpha_2\,\{y : \ol{\alpha_1}\}\to \alpha_2\,\{y : \ol{\alpha_1}\}\})\\
+  & && \hspace{3em} : \mi{List}\,(\{y : \ol{\alpha_1}\} \to \alpha_2\,\{y : \ol{\alpha_1}\}\to \alpha_2\,\{y : \ol{\alpha_1}\})\\
+  & \scriptstyle{11} && \quad \unify\,(\mi{List}\,(\{A : \U\}\to A \to A))\,(\mi{List}\,(\{y : \ol{\alpha_1}\} \to \alpha_2\,\{y : \ol{\alpha_1}\}\to \alpha_2\,\{y : \ol{\alpha_1}\}))\\
   & \scriptstyle{12} && \qquad \unify\,(\{A : \U\}\to A \to A)\,(\{y : \ol{\alpha_1}\} \to \alpha_2\,\{y : \ol{\alpha_1}\}\to \alpha_2\,\{y : \ol{\alpha_1}\})\\
   & \scriptstyle{13} && \qquad\quad \unify\,\alpha_1\,((A : \U) \TCons (\alpha_3\,A))\\
   & \scriptstyle{14} && \qquad \quad \unify\,(A \to A)\,(\{z : \ol{\alpha_3\,A}\} \to \alpha_2\,\{A\}\,\{z : \ol{\alpha_3\,A}\}\to \alpha_2\,\{A\}\,\{z : \ol{\alpha_3\,A}\})\\
@@ -1517,7 +1518,7 @@ elaboration using the extended algorithm.
   & \scriptstyle{16} && \qquad \qquad \unify\,(A \to A)\,(\alpha_2\,\{A\} \to \alpha_2\,\{A\})\\
   & \scriptstyle{17} && \qquad \qquad \quad \unify\,A\,(\alpha_2\,\{A\})\\
   & \scriptstyle{18} && \qquad \qquad \quad \unify\,A\, A\\
-  & \scriptstyle{19} && = cons\,\{\{A : \U\}\to A \to A\}\,(\lambda\,\{A\}\,x.\,x)\,(nil\,\{\{A : \U\}\to A \to A\})
+  & \scriptstyle{19} && = \mi{cons}\,\{\{A : \U\}\to A \to A\}\,(\lambda\,\{A\}\,x.\,x)\,(\mi{nil}\,\{\{A : \U\}\to A \to A\})
 \end{alignat*}
 We diverge from the previous attempt at line $\scriptstyle{5}$. Here, we check
 $\lambda\,x.\,x$ with the meta $\alpha_0$, so we create a fresh $\alpha_1 :
@@ -1526,7 +1527,7 @@ $\lambda\,x.\,x$ with the meta $\alpha_0$, so we create a fresh $\alpha_1 :
 \ol{\alpha_1}\} \to \alpha_2\,\{y : \ol{\alpha_1}\}\to \alpha_2\,\{y :
 \ol{\alpha_1}\}$, and we promptly unify $\alpha_0$ (which stands for the list
 element type) with it. On line $\scriptstyle{10}$, we return the elaborated
-$cons$ expression, where the list element type is made explicit. It only remains
+$\mi{cons}$ expression, where the list element type is made explicit. It only remains
 to unify the inferred and expected types. On line $\scriptstyle{12}$ we have the
 case where a curried function type is matched with an implicit function type, so
 on line $\scriptstyle{13}$ we refine $\alpha_1$ to a non-empty telescope, and
@@ -1569,30 +1570,31 @@ types and abstractions are computed away.
 
 \begin{example}
 We illustrate now the action of constancy constraints, using the example from
-Section \ref{sec:superfluous}. Again, assume $Bool : \U$ and $true : Bool$.
+Section \ref{sec:superfluous}. Again, assume $\mi{Bool} : \U$ and $\mi{true} : \mi{Bool}$.
 \begin{alignat*}{3}
-& \scriptstyle{0}\qquad\qquad && \einfert{\slet\,x : \_ = true\,\sin\,x}
+& \scriptstyle{0}\qquad\qquad && \einfert{\slet\,x : \_ = \mi{true}\,\sin\,x}
       \hspace{21em}\\
 & \scriptstyle{1} && \quad \echeckt{\_}{\U} = \alpha_0\\
-& \scriptstyle{3} && \quad \echeckt{true}{\alpha_0}\\
+& \scriptstyle{3} && \quad \echeckt{\mi{true}}{\alpha_0}\\
 & \scriptstyle{4} && \qquad \mathsf{freshMeta}\,\Tel = \alpha_1\\
-& \scriptstyle{6} && \qquad \einfert{true}\,= true : Bool\\
-& \scriptstyle{8} && \qquad \mathsf{newConstancy}_{\emptycon,\,x : \Rec\,\alpha_1}\,Bool\\
+& \scriptstyle{6} && \qquad \einfert{\mi{true}}\,= \mi{true} : \mi{Bool}\\
+& \scriptstyle{8} && \qquad \mathsf{newConstancy}_{\emptycon,\,x : \Rec\,\alpha_1}\,\mi{Bool}\\
 & \scriptstyle{9} && \qquad\quad \unify\,\alpha_1\,\epsilon\\
-& \scriptstyle{10} && \qquad \unify\,\alpha_0\,Bool\\
-& \scriptstyle{11} && \quad = true\\
-& \scriptstyle{12} && \quad \einfert{x}{\true} = true : Bool\\
-& \scriptstyle{14} && = (\slet\,x : Bool = true\,\sin\,x) : Bool
+& \scriptstyle{10} && \qquad \unify\,\alpha_0\,\mi{Bool}\\
+& \scriptstyle{11} && \quad = \mi{true}\\
+& \scriptstyle{12} && \quad \einfert{x}{\mi{true}} = \mi{true} : \mi{Bool}\\
+& \scriptstyle{14} && = (\slet\,x : \mi{Bool} = \mi{true}\,\sin\,x) : \mi{Bool}
 \end{alignat*}
 First we create a fresh meta $\alpha_0$ for the hole on line $\scriptstyle{2}$,
-then we check $\true$ with it. Since we are checking with a meta-headed type, we
-create a fresh telescope meta $\alpha_1$, then infer $Bool$ for $true$. On line
-$\scriptstyle{8}$ we create a constancy constraint and immediately try to solve
-it, as described in Section \ref{sec:algorithmic}. Since $Bool$ does not depend
-on the domain, we solve the constraint and thereby solve $\alpha_1$ as
-$\epsilon$. Hence, we simply return $true$ on line $\scriptstyle{11}$, since
-$\lambda\,\{x : \ol{\epsilon}\}.\,true$ computes to that, and elaboration
-succeeds with the expected output.
+then we check $\mi{true}$ with it. Since we are checking with a meta-headed type, we
+create a fresh telescope meta $\alpha_1$, then infer $\mi{Bool}$ for
+$\mi{true}$. On line $\scriptstyle{8}$ we create a constancy constraint and
+immediately try to solve it, as described in Section
+\ref{sec:algorithmic}. Since $\mi{Bool}$ does not depend on the domain, we solve
+the constraint and thereby solve $\alpha_1$ as $\epsilon$. Hence, we simply
+return $\mi{true}$ on line $\scriptstyle{11}$, since $\lambda\,\{x :
+\ol{\epsilon}\}.\,\mi{true}$ computes to that, and elaboration succeeds with the
+expected output.
 \end{example}
 
 \section{Implementation}
@@ -1676,15 +1678,15 @@ neutral applications is rather ad-hoc.
 
 \begin{figure}
 \begin{alignat*}{4}
-  & IdTy   && :\equiv \{A : \U\}\to A \to A   \hspace{10em}         && inc    && : Int \to Int                                        \\
-  & single && : \{A : \U\} \to A \to List\,A                       && auto   && : IdTy \to IdTy                                      \\
-  & id     && : IdTy                                               && auto'  && : \{B : \U\}\to IdTy \to B \to B                     \\
-  & ids    && : List\,IdTy                                         && choose && : \{A : \U\} \to A \to A \to A                       \\
-  & nil    && : \{A : \U\}\to List\,A                              && app    && : \{A\,B : \U\} \to (A \to B) \to A \to B            \\
-  & cons   && : \{A : \U\} \to A \to List\,A \to List\,A           && revapp && : \{A\,B : \U\} \to A \to (A \to B) \to B            \\
-  & head   && : \{A : \U\} \to List\,A \to A                           && runST  && : \{A : \U\} \to (\{S : \U\} \to ST\,S\,A) \to A     \\
-  & tail   && : \{A : \U\} \to List\,A \to List\,A                     && argST  && : \{S : \U\}\to ST\,S\,Int                           \\
-  & map    && : \{A\,B : \U\} \to (A \to B) \to List\,A \to List\,B && poly   && : IdTy \to Pair\,Int\,Bool
+  & \mi{IdTy}   && :\equiv \{A : \U\}\to A \to A   \hspace{10em}         && \mi{inc}    && : \mi{Int} \to \mi{Int}                                        \\
+  & \mi{single} && : \{A : \U\} \to A \to \mi{List}\,A                        && \mi{auto}   && : IdTy \to IdTy                                      \\
+  & \mi{id}     && : IdTy                                                && \mi{auto'}  && : \{B : \U\}\to IdTy \to B \to B                     \\
+  & \mi{ids}    && : \mi{List}\,IdTy                                          && \mi{choose} && : \{A : \U\} \to A \to A \to A                       \\
+  & \mi{nil}    && : \{A : \U\}\to \mi{List}\,A                               && \mi{app}    && : \{A\,B : \U\} \to (A \to B) \to A \to B            \\
+  & \mi{cons}   && : \{A : \U\} \to A \to \mi{List}\,A \to \mi{List}\,A            && \mi{revapp} && : \{A\,B : \U\} \to A \to (A \to B) \to B            \\
+  & \mi{head}   && : \{A : \U\} \to \mi{List}\,A \to A                        && \mi{runST}  && : \{A : \U\} \to (\{S : \U\} \to \mi{ST}\,S\,A) \to A     \\
+  & \mi{tail}   && : \{A : \U\} \to \mi{List}\,A \to \mi{List}\,A                  && \mi{argST}  && : \{S : \U\}\to \mi{ST}\,S\,\mi{Int}                           \\
+  & \mi{map}    && : \{A\,B : \U\} \to (A \to B) \to \mi{List}\,A \to \mi{List}\,B && \mi{poly}   && : IdTy \to \mi{Pair}\,\mi{Int}\,\mi{Bool}
 \end{alignat*}
 \caption{Types used in Figure \ref{fig:benchmark}.}
 \label{fig:benchmark_types}
@@ -1698,51 +1700,51 @@ A & \multicolumn{2}{l|}{\textsc{polymorphic instantiation}}\\
 A1 & $\lambda\,x\,y.\,y$ & \yesst\\
    & \text{we infer a type which may be solved to $\{A\,B : \U\}\to A \to B \to A$} &\\
    & \text{but not to $\{A : \U\}\to A \to \{B : \U\} \to B \to A$} & \\
-A2 & $choose\,id$ & \yesst \\
-A3 & $choose\,nil\,ids$ & \yes \\
+A2 & $\mi{choose}\,\mi{id}$ & \yesst \\
+A3 & $\mi{choose}\,\mi{nil}\,\mi{ids}$ & \yes \\
 A4 & $\lambda\,(x : \{A : \U\}\to A \to A).\,x\,x$ & \yesst\\
-A5 & $id\,auto$ & \yes\\
-A6 & $id\,auto'$ & \yesst\\
-A7 & $choose\,id\,auto$ & \yes\\
-A8 & $choose\,id\,auto'$ & \no\\
-A9 & $\lambda\,(f : \{A : \U\}\to(A\to A)\to List\,A \to A).\,f\,(choose\,id)\,ids$ & \yesst\\
-A10 & $poly\,id$ & \yes\\
-A11 & $poly\,(\lambda\,x.\,x)$ & \yes\\
+A5 & $\mi{id}\,\mi{auto}$ & \yes\\
+A6 & $\mi{id}\,\mi{auto'}$ & \yesst\\
+A7 & $\mi{choose}\,\mi{id}\,\mi{auto}$ & \yes\\
+A8 & $\mi{choose}\,\mi{id}\,\mi{auto'}$ & \no\\
+A9 & $\lambda\,(f : \{A : \U\}\to(A\to A)\to \mi{List}\,A \to A).\,f\,(\mi{choose}\,\mi{id})\,\mi{ids}$ & \yesst\\
+A10 & $\mi{poly}\,\mi{id}$ & \yes\\
+A11 & $\mi{poly}\,(\lambda\,x.\,x)$ & \yes\\
 \hline
 B & \multicolumn{2}{l|}{\textsc{inference of polymorphic arguments}}\\
 \hline
-B1 & $\lambda\,f.\,pair\,(f\,zero)\,(f\,true)$ & \no\\
-B2 & $\lambda\,xs.\,poly\,(head\,xs)$ & \no\\
+B1 & $\lambda\,f.\,\mi{pair}\,(f\,\mi{zero})\,(f\,\mi{true})$ & \no\\
+B2 & $\lambda\,xs.\,\mi{poly}\,(\mi{head}\,xs)$ & \no\\
 \hline
 C & \multicolumn{2}{l|}{\textsc{functions on polymorphic lists}}\\
 \hline
-C1  & $length\,ids$ & \yes \\
-C2  & $tail\,ids$ & \yes \\
-C3  & $head\,ids$ & \yesst \\
-C4  & $single\,id$ & \yesst \\
-C5  & $cons\,id\,ids$ & \yes \\
-C6  & $cons\,(\lambda\,x.\,x)\,ids$ & \yes \\
-C7  & $append\,(single\,inc)\,(single\,id)$ & \yes \\
-C8  & $\lambda\,(g:\{A:\U\}\to List\,A \to List\,A \to A).\,g\,(single\,id)\,ids$ & \yesst \\
-C9  & $map\,poly\,(single\,id)$ & \yes \\
-C10 & $map\,head\,(single\,ids)$ & \yes \\
+C1  & $\mi{length}\,\mi{ids}$ & \yes \\
+C2  & $\mi{tail}\,\mi{ids}$ & \yes \\
+C3  & $\mi{head}\,\mi{ids}$ & \yesst \\
+C4  & $\mi{single}\,\mi{id}$ & \yesst \\
+C5  & $\mi{cons}\,\mi{id}\,\mi{ids}$ & \yes \\
+C6  & $\mi{cons}\,(\lambda\,x.\,x)\,\mi{ids}$ & \yes \\
+C7  & $\mi{append}\,(\mi{single}\,\mi{inc})\,(\mi{single}\,\mi{id})$ & \yes \\
+C8  & $\lambda\,(g:\{A:\U\}\to \mi{List}\,A \to \mi{List}\,A \to A).\,g\,(\mi{single}\,\mi{id})\,\mi{ids}$ & \yesst \\
+C9  & $\mi{map}\,\mi{poly}\,(\mi{single}\,\mi{id})$ & \yes \\
+C10 & $\mi{map}\,\mi{head}\,(\mi{single}\,\mi{ids})$ & \yes \\
 \hline
 D & \multicolumn{2}{l|}{\textsc{application functions}}\\
 \hline
-D1 & $app\,poly\,id$        & \yes \\
-D2 & $revapp\,id\,poly$     & \yes \\
-D3 & $runST\,argST$         & \yes \\
-D4 & $app\,runST\,argST$    & \yes \\
-D5 & $revapp\,argST\,runST$ & \yes \\
+D1 & $\mi{app}\,\mi{poly}\,\mi{id}$        & \yes \\
+D2 & $\mi{revapp}\,\mi{id}\,\mi{poly}$     & \yes \\
+D3 & $\mi{runST}\,\mi{argST}$              & \yes \\
+D4 & $\mi{app}\,\mi{runST}\,\mi{argST}$    & \yes \\
+D5 & $\mi{revapp}\,\mi{argST}\,\mi{runST}$ & \yes \\
 \hline
 E & \multicolumn{2}{l|}{\textsc{$\eta$-expansion}}\\
 \hline
-& \multicolumn{2}{l|}{assuming $k : \{A : \U\}\to A \to List\,A \to A$,} \\
-& \multicolumn{2}{l|}{$h : Int \to \{A:\U\}\to A \to A$}\\
-& \multicolumn{2}{l|}{and $lst : List\,(\{A:\U\} \to Int \to A \to A)$} \\
+& \multicolumn{2}{l|}{assuming $k : \{A : \U\}\to A \to \mi{List}\,A \to A$,} \\
+& \multicolumn{2}{l|}{$h : \mi{Int} \to \{A:\U\}\to A \to A$}\\
+& \multicolumn{2}{l|}{and $lst : \mi{List}\,(\{A:\U\} \to \mi{Int} \to A \to A)$} \\
 E1 & $k\,h\,lst$ & \no \\
 E2 & $k\,(\lambda\,x.\,h\,x)\,lst$ & \yesst \\
-E3 & $\lambda\,(r : (\{A :\U\}\to A \to \{B : \U\}\to B \to B) \to Int).\,r\,(\lambda\,x\,y.\,y)$ & \yes \\
+E3 & $\lambda\,(r : (\{A :\U\}\to A \to \{B : \U\}\to B \to B) \to \mi{Int}).\,r\,(\lambda\,x\,y.\,y)$ & \yes \\
 \hline
 \multicolumn{3}{l}{\text{{\footnotesize
 ``Yes*'' means that our system can infer a type for the
@@ -1780,7 +1782,7 @@ do not float out or reorder implicit arguments in any way, because we want to
 support arbitrary mixing of implicit/explicit arguments in the surface language,
 and such reordering would be problematic anyway in the presence of dependent
 types. The same situation arises in $E1$, where we cannot unify $\{A : \U\}\to
-Int \to A \to A$ with $Int \to \{A : \U\}\to A \to A$.
+\mi{Int} \to A \to A$ with $\mi{Int} \to \{A : \U\}\to A \to A$.
 
 Some general comments on the comparison of FCIF to prior works. First, FCIF
 supports dependent types and prior solutions do not. It is also unclear whether
@@ -1792,13 +1794,13 @@ argument values, and skipping over arguments may clog up type computation in an
 unacceptable way.
 
 Secondly, FCIF supports global inference. For an example for global inference,
-$\slet\,x : \_ = single\,id\,\sin\,$ $cons\,\{IdTy\}\,x\,nil$ works in FCIF, MLF
-and HML but does not work in GI, QL and HMF. MLF and HML work here by
-immediately giving a principal type to $single\,id$ which involves
-generalization with a subtyping bound. In contrast, FCIF makes no promises about
-principal typing --- which is not feasible with dependent types --- and does no
-generalization, but it can still infer a type for $id$ which can be later
-constrained to $IdTy$.
+$\slet\,x : \_ = \mi{single}\,\mi{id}\,\sin\,$
+$\mi{cons}\,\{\mi{IdTy}\}\,x\,\mi{nil}$ works in FCIF, MLF and HML but does not
+work in GI, QL and HMF. MLF and HML work here by immediately giving a principal
+type to $single\,id$ which involves generalization with a subtyping bound. In
+contrast, FCIF makes no promises about principal typing --- which is not
+feasible with dependent types --- and does no generalization, but it can still
+infer a type for $id$ which can be later constrained to $IdTy$.
 
 
 \subsection{Inferring Polymorphic Types for Function Arguments}
@@ -1809,7 +1811,7 @@ cannot infer implicit function types for function arguments.  MLF is the only
 system which can do this, in cases where the polymorphic argument is used only
 once. Consider the following:
 \[
-  \slet\,f : IdTy \to Bool = \lambda\,\_.\,true\,\sin\,\lambda\,x.\,f\,x
+  \slet\,f : \mi{IdTy} \to \mi{Bool} = \lambda\,\_.\,\mi{true}\,\sin\,\lambda\,x.\,f\,x
   \]
 FCIF will attempt to elaborate $f\,x$ to $f\,(\lambda\{A\}.\,x)$, but fails to
 infer a type for $x$, because $A$ is not in the scope of $x$'s type. We sketch
