@@ -85,6 +85,7 @@
 \newcommand{\fail}{\mathsf{fail}}
 \newcommand{\kw}[1]{{\mathsf{#1}}}
 \newcommand{\FreeVars}{\mathsf{FreeVars}}
+\newcommand{\mi}[1]{\mathit{#1}}
 
 \newcommand{\echeckblank}{\llbracket\blank\rrbracket\!\Downarrow}
 \newcommand{\einferblank}{\llbracket\blank\rrbracket\!\Uparrow}
@@ -259,7 +260,7 @@ $\kw{ImpredicativeTypes}$ language extension, as of GHC 8.8 this extension is
 deprecated and is not particularly usable in practice.
 
 In Agda, implicit functions are truly a first-class notion, and we may have
-$List\,(\{A : \kw{Set}\}\to A \to A)$ without issue. However, Agda's elaboration
+$List\,(\{A : \kw{Set}\}\to A \to A)$ without issues. However, Agda's elaboration
 still has limitations when it comes to handling implicit functions. Assume that
 we have $[]$ for the empty list and $\blank::\blank$ for list extension,
 and consider the following code:
@@ -383,7 +384,7 @@ algorithm and illustrate the key issues. We extend this elaborator in Section
              {\emptycon \vdash}
 
   \inferrule*[lab=metacon/bind]
-             {\Theta \vdash \\ \Theta \vdash A : \U}
+             {\Theta \vdash \\ \Theta|\emptycon \vdash A : \U}
              {\Theta, \alpha : A \vdash}
 
   \inferrule*[lab=con/empty]
@@ -482,8 +483,32 @@ annotation, as in $\slet\,x : \_ = \U\,\sin\,x$.
 
 \subsection{Core syntax}
 
-Figure \ref{fig:plaincore} lists selected rules of the core language. We avoid a
-fully formal presentation in this paper. Some notes on what is elided:
+Figure \ref{fig:plaincore} lists selected rules of the core language.
+
+Metacontexts are used to record metavariables which are created during
+elaboration. In our case, metacontexts are simply a context prefix, and we have
+variables pointing into it. This corresponds to a particularly simple variant of
+\emph{crisp type theory} \cite{licata2018internal}, where we do not have modal
+type operators or functions with crisp (``meta'') domain. The non-meta typing
+context additionally supports \emph{defined variables}, which is used in the
+typing rule for $\slet$-definitions, and we have that any defined variable is
+equal to its definition. We support $\slet$ as a convenience feature which
+is important for defining more involved example programs\footnote{In presentations of dependent type theories without explicit substitutions, the $\slet$ rule is not
+  derivable from function application, unlike in simple type theories.}.
+
+The universe $\U$ is Russell-style, and we have the type-in-type rule.
+This causes our core syntax to be non-total, and our elaboration algorithm to be
+possibly non-terminating. We use type-in-type to simplify presentation, since
+consistent universe setups are orthogonal to the focus of this work.
+
+Function types only differ from each other in notation: implicit
+functions have the same rules as ``explicit'' functions. The primary purpose of
+implicit function types is to \emph{guide elaboration}: the elaborator will at
+times compute a type and branch on whether it is an implicit function.
+
+We avoid a fully formal presentation in this paper. For examples of what such a
+presentation looks like, see \cite{decidableconv} or \cite{coqnbe}. Some notes
+on what is elided:
 \begin{itemize}
   \item We use nameful notation and implicit weakening, i.e.\ whenever a term is
     well-formed in some context, it is assumed to be well-formed (as it is) in
@@ -491,7 +516,7 @@ fully formal presentation in this paper. Some notes on what is elided:
     fresh, e.g.\ when we write $\Theta,\,\alpha : A$, we assume that $\alpha$ is
     fresh in $\Theta$.  Formally, we would use de Bruijn indices for variables,
     and define variable renaming and parallel substitution by recursion on
-    presyntax, e.g.\ as in \cite{schafer2015autosubst}.
+    presyntax, e.g.\ as in \cite{autosubst}.
   \item Fixing any $\Theta$ metacontext, parallel substitutions of bound and
     defined variables form morphisms of a category, where the identity
     substitution $\id$ maps each variable to itself and composition
@@ -518,30 +543,9 @@ Alternatively, one could present the syntax as a generalized algebraic theory
 and we would also get a rich model theory for our syntax. However, it seems that
 there are a number of possible choices for giving an algebraic presentation of
 metacontexts, and existing works on algebraic presentations of dependent modal
-contexts (e.g.\ \cite{birkedal2018modal}) do not precisely cover the current use
+contexts (e.g.\ \cite{dependentrightadjoints}) do not precisely cover the current use
 case. We leave this to future work, along with the investigation of elaboration
 from an algebraic perspective.
-
-Metacontexts are used to record metavariables which are created during
-elaboration. In our case, metacontexts are simply a context prefix, and we have
-variables pointing into it. This corresponds to a particularly simple variant of
-\emph{crisp type theory} \cite{licata2018internal}, where we do not have modal
-type operators or functions with crisp (``meta'') domain. The non-meta typing
-context additionally supports \emph{defined variables}, which is used in the
-typing rule for $\slet$-definitions, and we have that any defined variable is
-equal to its definition. We support $\slet$ as a convenience feature which
-is important for defining more involved example programs\footnote{In presentations of dependent type theories without explicit substitutions, the $\slet$ rule is not
-  derivable from function application, unlike in simple type theories.}.
-
-The universe $\U$ is Russell-style, and we have the type-in-type rule.
-This causes our core syntax to be non-total, and our elaboration algorithm to be
-possibly non-terminating. We use type-in-type to simplify presentation, since
-consistent universe setups are orthogonal to the focus of this work.
-
-Function types only differ from each other in notation: implicit
-functions have the same rules as ``explicit'' functions. The primary purpose of
-implicit function types is to \emph{guide elaboration}: the elaborator will at
-times compute a type and branch on whether it is an implicit function.
 
 \emph{Notations.} We use Agda-like syntactic sugar both in the surface syntax and
 in core syntax.
@@ -562,7 +566,7 @@ in core syntax.
 \begin{example}
 The core syntax is quite expressive as a programming language, thanks to
 $\slet$-definitions and the
-type-in-type rule which allows Church-encodings for a large class of inductive
+type-in-type rule which allows Church encodings for a large class of inductive
 types. For example, the following term computes a list of types by mapping:
 \begin{alignat*}{3}
   & \slet\,List : \U\to\U\\
@@ -583,17 +587,25 @@ meta creation or solution of a meta).
 
 \begin{itemize}
   \item
-    A metasubstitution $\boxed{\theta : \Theta_0 \To \Theta_1}$ assigns to each variable
+    A metasubstitution $\theta : \Theta_0 \To \Theta_1$ assigns to each variable
     in $\Theta_1$ a term in $\Theta_0$ , hence it is represented as a list of
     terms $(\alpha_1 \mapsto t_1,\,...\,\,\alpha_i \mapsto t_i)$.
   \item
     We define the action of a metasubstitution on contexts and terms by
-    recursion; we notate action on contexts as $\Gamma[\theta]$ and action on
+    recursion; we write action on contexts as $\Gamma[\theta]$ and action on
     terms as $t[\theta]$. We remark that there is no abstraction for
     metavariables in the core syntax, so we do not have to handle variable
     capture (or index shifting).
+  \item
+    We list some of the admissible rules in Figure \ref{fig:metasub}, which
+    are relevant in the rest of the paper.
 \end{itemize}
-The following are admissible:
+
+\begin{figure}
+\begin{alignat*}{2}
+  & \boxed{\theta : \Theta_0 \To \Theta_1} \hspace{3em} && \text{\emph{metasubstitution formation}}
+\end{alignat*}
+
 \begin{mathpar}
   \inferrule*[lab=metasub/empty]
              {\Theta\vdash}
@@ -621,26 +633,29 @@ The following are admissible:
 
   \inferrule*[lab=metasub/weakening]
              {\\}
-             {\p : (\Theta,\,x : A) \To \Theta}
+             {\p : (\Theta,\,\alpha : A) \To \Theta}
 \end{mathpar}
+\caption{Admissible rules for metasubstitutions.}
+\label{fig:metasub}
+\end{figure}
 
-%% \end{mathpar}
-%% \begin{mathpar}
 
 The identity substitution $\id$ maps each variable to itself. Composition is
 given by pointwise term substitution, $\id$ and $\blank\circ\blank$ yields a
 category, and the action of metasubstitution on contexts and terms is
 functorial. The weakening substitution $\p$ (the naming comes from
-categories-with-families terminology \cite{dybjer1995internal}) can be defined
-as dropping the last entry from $\id : (\Theta,\,x : A) \To (\Theta,\,x : A)$.
+categories-with-families terminology \cite{Dybjer96internaltype}) can be defined
+as dropping the last entry from $\id : (\Theta,\,\alpha : A) \To
+(\Theta,\,\alpha : A)$.
+
 
 \subsection{Fresh Metavariables}
 
 Using \emph{contextual metavariables} is a standard practice in the
 implementation of dependently typed languages. This means that every ``hole'' in
 the surface language is represented as an unknown function which abstracts over
-all bound variables in the scope of a hole. Unlike \cite{nanevski2008contextual}
-and similarly to \cite{gundry2013type}, we do not have a first-class notion of
+all bound variables in the scope of a hole. Unlike \citet{nanevski2008contextual}
+and similarly to \citet{gundry2013type}, we do not have a first-class notion of
 contextual types, and instead reuse the standard dependent function type to
 abstract over enclosing contexts.
 
@@ -670,17 +685,17 @@ $(\Gamma \To \U) \equiv ((A : \U)(B : A \to \U) \to \U)$ and
 $t\,\overline{\mathsf{vars}_{\Gamma}} \equiv t\,A\,B$.
 \end{example}
 
-\begin{definition}[Fresh meta creation]\label{def:freshmeta} We specify $\freshMeta{\Theta}{\Gamma}{A}$ as follows:
+\begin{definition}[Fresh meta creation]\label{def:freshmeta} We define $\freshMeta{\Theta}{\Gamma}{A}$ as follows:
   \begin{mathpar}
   \inferrule*{\Theta|\Gamma\vdash A : \U}
-             {\freshMeta{\Theta}{\Gamma}{A} \in \{(\Theta',\,\theta,\,t)\,|\,(\theta : \Theta' \To \Theta)\,\land\,(\Theta'|\Gamma[\theta]\vdash t : A[\theta])\}}
+             {\freshMeta{\Theta}{\Gamma}{A} \in \{(\Theta',\,\theta,\,t)\,|\,(\theta : \Theta' \To \Theta)\,\land\,(\Theta'|\Gamma[\theta]\vdash t : A[\theta])\} \\
+              \freshMeta{\Theta}{\Gamma}{A} :\equiv
+              ((\Theta,\,\alpha:\Gamma\To A),\,\p,\,\alpha\,\overline{\mathsf{vars}_{\Gamma}})}
   \end{mathpar}
-The definition $\freshMeta{\Theta}{\Gamma}{A} :\equiv ((\Theta,\,\alpha:\Gamma\To
-A),\,\p,\,\alpha\,\overline{\mathsf{vars}_{\Gamma}})$, where $\alpha$ is fresh in
-$\Theta$, satisfies this specification. We extend $\Theta$ with a fresh meta,
-which has the closing type $\Gamma \To A$. The $\p$ weakening relates the new
-metacontext to the old one, by ``dropping'' the new entry. Lastly,
-$\alpha\,\overline{\mathsf{vars}_{\Gamma}}$ is the fresh meta
+In the definition of $\freshMeta{\Theta}{\Gamma}{A}$, we extend $\Theta$ with a
+fresh meta, which has the closing type $\Gamma \To A$. The $\p$ weakening
+relates the new metacontext to the old one, by ``dropping'' the new
+entry. Lastly, $\alpha\,\overline{\mathsf{vars}_{\Gamma}}$ is the fresh meta
 applied to all bound variables.
 \end{definition}
 
@@ -703,13 +718,14 @@ For a simple example, assuming $\Theta :\equiv (\emptycon,\,\alpha : \U,\, \beta
 \Theta$.
 
 Here, we do not require that unification returns most general unifiers, nor do
-we go into the details of how unification is implemented. Gundry describes
-unification in detail in \cite[Chapter~4]{gundry2013type} for a similar syntax,
-with a similar (though more featureful) setup for metacontexts. See also
-\cite{abel2011higher} for a reference on unification. Note that our unification
-algorithm does not support \emph{constraint postponing}, as we have not talked
-about constraints at all. In our concrete prototype implementation, unification
-supports basic pattern unification and metavariable pruning.
+we go into the details of how unification is
+implemented. \citet[Chapter~4]{gundry2013type} describes unification in detail
+for a similar syntax, with a similar (though more featureful) setup for
+metacontexts. See also \cite{abel2011higher} for a reference on
+unification. Note that our unification algorithm does not support
+\emph{constraint postponing}, as we have not talked about constraints at all. In
+our concrete prototype implementation, unification supports basic pattern
+unification and metavariable pruning.
 
 \subsection{Elaboration}
 
@@ -725,7 +741,7 @@ the used notations:
     whether a type is a function type. This assumes an evaluation/normalization
     procedure on core terms; but note that we already assume this in
     unification.
-  \item We abbreviate $\theta_1 \circ \theta_2$ as $\theta_{12}$, $\theta_1
+  \item We abbreviate $\theta_1 \circ \theta_2$ as $\theta_{12}$ and $\theta_1
     \circ \theta_2 \circ \theta_3$ as $\theta_{123}$ and analogously in other
     cases. We do this to reduce the visual noise caused by threading composed
     metasubstitutions everywhere in the elaboration algorithm.
@@ -772,7 +788,7 @@ We present the specifications and definitions below, then we describe them in or
   &\quad\ereturn\,(\Theta',\,\theta,\,\lambda\,\{x\}.\,t')\\
   &\echeck{t}{\Theta}{\Gamma}{(\{x : A\}\to B)} : \equiv \edo \\
   &\quad (\Theta',\,\theta,\,t') \leftarrow \echeck{t}{\Theta}{\Gamma,\,x:A} B\\
-  &\quad (\Theta',\,\theta,\,\lambda\,\{x\}.\,t')\\
+  &\quad \ereturn\,(\Theta',\,\theta,\,\lambda\,\{x\}.\,t')\\
   &\echeck{\slet\,x:A=t\,\sin\,u}{\Theta_0}{\Gamma}{B} :\equiv \edo \\
   &\quad(\Theta_1,\,\theta_1,\,A') \leftarrow \echeck{A}{\Theta_0}{\Gamma}{\U}\\
   &\quad(\Theta_2,\,\theta_2,\,t') \leftarrow \echeck{t}
@@ -793,9 +809,9 @@ We present the specifications and definitions below, then we describe them in or
   &\einfer{\U}{\Theta}{\Gamma} :\equiv \edo\\
   &\quad\ereturn\,(\Theta,\,\id,\,\U,\,\U)\\
   &\einfer{(x : A)\to B}{\Theta_0}{\Gamma} :\equiv \edo\\
-  &\quad(\Theta_1,\,\theta_1,\,A') \leftarrow \echeck{A}{\Theta_1}{\Gamma}{\U}\\
+  &\quad(\Theta_1,\,\theta_1,\,A') \leftarrow \echeck{A}{\Theta_0}{\Gamma}{\U}\\
   &\quad(\Theta_2,\,\theta_2,\,B') \leftarrow
-                 \echeck{B}{\Theta_2}{\Gamma[\theta_1],\,x : A'}{\U}\\
+                 \echeck{B}{\Theta_1}{\Gamma[\theta_1],\,x : A'}{\U}\\
   &\quad\ereturn\,(\Theta_2,\,\theta_{12},
                  \,((x : A'[\theta_2])\to B'),\,\U)\\
   &\einfer{\{x : A\}\to B}{\Theta_0}{\Gamma} :\equiv \edo\\
@@ -839,11 +855,11 @@ We present the specifications and definitions below, then we describe them in or
 \end{alignat*}
 \endgroup
 \subsubsection{Implicit argument insertion}
-This inserts implicit applications around a core term. For example, if we have a
-defined name $id$ with type $\{A : \U\}\to A \to A$ in a surface program, we
-usually want to expand $id$ to $id\,\{\alpha\}$, where $\alpha$ is a fresh
-metavariable. We define $\einsert$ to take as input the output of
-$\einferblank$, so that it is more convenient to use as an optional
+The function $\einsert$ inserts implicit applications around a core term. For
+example, if we have a defined name $id$ with type $\{A : \U\}\to A \to A$ in a
+surface program, we usually want to expand $id$ to $id\,\{\alpha\}$, where
+$\alpha$ is a fresh metavariable. We define $\einsert$ to take as input the
+output of $\einferblank$, so that it is more convenient to use as an optional
 post-processing step after inference.
 
 \subsubsection{Checking}
@@ -921,7 +937,7 @@ but rather match on the inferred type, and only perform refining when the type
 is meta-headed. We present the unoptimized version here for the sake of brevity.
 
 In the case of $\slet$, inference again just falls through, and we infer a type
-for the $\slet$ body. For $\einfer{\_}{ins}{\Theta}{\Gamma}$, we create a fresh meta
+for the $\slet$ body. For $\einfer{\_}{\Theta}{\Gamma}$, we create a fresh meta
 for the type of the hole, and another fresh meta for the hole itself.
 
 \subsubsection{Starting and finishing elaboration} Given a surface term $t$,
@@ -992,9 +1008,9 @@ $\lambda$ domain type annotations for the sake of brevity.
     \cite{eisenberg2016dependent} for a treatment in a proposed dependent
     version of Haskell.
   \item \emph{Polymorphic subtyping}. In some prior works, e.g.\ in
-    \cite{dunfield2013complete, vytiniotis2008fph}, there is a subtyping
-    relation arising along instantiations of polymorphic types. In GHC 8
-    polymorphic subtyping is implemented for function types only. Polymorphic
+    \cite{dunfield2013complete} and \cite{vytiniotis2008fph}, there is a
+    subtyping relation arising along instantiations of polymorphic types. In GHC
+    8 polymorphic subtyping is implemented for function types only. Polymorphic
     subtyping complicates type inference, and to our knowledge it has not been
     implemented in any dependently typed setting. We also believe that it is
     undesirable in dependent settings, because elaboration of subtyping must
@@ -1021,7 +1037,7 @@ cons : \{A : \U\} \to A \to List\,A \to List\,A
 \]
 In the following, we present a trace of checking $cons\,(\lambda\,x.\,x)\,nil$
 at type $List\,(\{A : \U\}\to A \to A)$. We omit context and metacontext
-parameters everywhere, and notate recursive calls by indentation. We also omit
+parameters everywhere, and mark recursive calls by indentation. We also omit
 some checking, inference, implicit insertion and unification calls which are not
 essential for illustration.
 \begin{alignat*}{3}
@@ -1066,7 +1082,7 @@ insertion.
 
 There is a potential naive solution: just \emph{postpone} checking a term until
 the shape of the checking type is known for sure. This was included as part of a
-proposed solution for smarter $\lambda$-insertions in
+proposed solution for smarter $\lambda$-insertions by
 \cite{johansson2015eliminating}. This means that checking with a meta-headed
 type returns a ``guarded constant'' \cite[Chapter~3]{norell07thesis}, an opaque
 stand-in which only computes to an actual core term when the checking type
@@ -1114,8 +1130,9 @@ particular the left side of the \LabTirName{${[}{]}$-$\eta$} rule has type
 $\Rec\,\epsilon$.
 
 Telescopes and records are derivable from natural numbers, the unit type and
-$\Sigma$-types. We use Agda-like pattern matching notation in the following.
-First, we define length-indexed telescopes.
+$\Sigma$-types. We write $\top$ for the unit type with $\tt : \top$. We use
+Agda-like pattern matching notation in the following.  First, we define
+length-indexed telescopes.
 \begin{alignat*}{3}
   & \rlap{$\Tel' : \Nat \to \U$}\\
   & \Tel'\,\zero      && :\equiv \top\\
@@ -1211,7 +1228,7 @@ computed to iterated implicit function types when the domain telescope is
 canonical.  See \LabTirName{fun-$\epsilon$} and \LabTirName{fun-$\TCons$}: a
 curried function with empty domain computes to simply the codomain, while a
 function with a non-empty domain computes to an implicit function type. We
-explicitly notate telescopes in both $\lambda$-abstractions and applications for
+explicitly write telescopes in both $\lambda$-abstractions and applications for
 strictly curried functions, since they are relevant in the computation rules.
 
 Curried function types tend to be computed away, but they can persist if the
@@ -1248,7 +1265,8 @@ canonicity very cheaply. This is because models proving consistency or
 canonicity for the base theory with $\Nat$, $\top$ and $\Sigma$ usually support
 equality reflection. For consistency, standard set-theoretical models and models
 in extensional type theory have this property, for canonicity, glued models
-e.g.\ as in \cite{kaposi2019gluing, sterling2019algebraic} also have this property.
+(e.g.\ as in \cite{kaposi2019gluing} and \cite{sterling2019algebraic}) also have
+this property.
 
 In contrast, showing normalization and decidability of conversion would require
 some extra work. We leave this to future work, but we expect that it is not
@@ -1297,33 +1315,33 @@ for each record type in $\Gamma$.
 \subsection{Handling Superfluous Implicit Functions}\label{sec:superfluous}
 
 Before we can move on to unification and elaboration, we have to address
-a curious issue. Assuming $Bool : \U$, $true : Bool$ and $false : Bool$,
+a curious issue. Assuming $\mi{Bool} : \U$, $\mi{true} : \mi{Bool}$ and $\mi{false} : \mi{Bool}$,
 consider the following surface expression:
 \[
-  \slet\,x : \_ = true\,\sin\,x
+  \slet\,x : \_ = \mi{true}\,\sin\,x
 \]
 What should this expression elaborate to? We would expect the result to be simply
 \[
-  \slet\,x : Bool = true\,\sin\,x
+  \slet\,x : \mi{Bool} = \mi{true}\,\sin\,x
 \]
 However, there are infinitely many core terms which are conservative over the
 surface expression in the sense of Theorem \ref{thm:conservativity}. That is, we
 can wrap definitions with any number of implicit $\lambda$-s, and add implicit
 applications accordingly to usage sites of the defined name. For example, we could have
 \[
-  \slet\,x : \{y : Bool\} \to Bool = \lambda\,\{y\}.\,true\,\sin\,x\,\{true\}
+  \slet\,x : \{y : \mi{Bool}\} \to \mi{Bool} = \lambda\,\{y\}.\,\mi{true}\,\sin\,x\,\{\mi{true}\}
 \]
 This is clearly undesirable. With the type $\{y : Bool\} \to Bool$, the implicit
 argument $y$ is never inferable, because the codomain type does not depend on
 the domain, and the argument is never constrained. Hence, with the above
-definition, we always have to write $x\,\{true\}$ or $x\,\{false\}$ when we want
+definition, we always have to write $x\,\{\mi{true}\}$ or $x\,\{\mi{false}\}$ when we want
 to use $x$. In order to avoid such nonsense, we adopt the following principle:
 \emph{elaboration should never invent non-dependent implicit function types.}
 
 This was a non-issue in the old elaborator, because it was not able to invent
 implicit function types; it was only utilizing the type annotations present in
-the surface input. In the case of $\slet\,x : \_ = true$, the old elaborator
-checks $true$ with a fresh meta, and just assumes that the meta does not stand
+the surface input. In the case of $\slet\,x : \_ = \mi{true}$, the old elaborator
+checks $\mi{true}$ with a fresh meta, and just assumes that the meta does not stand
 for an implicit function type.
 
 \subsubsection{Constancy constraints}
@@ -1393,15 +1411,15 @@ constraints in the context, such that $x$ occurs in $B$ inside a $\ol{t}$ spine
 of some $\alpha\,\ol{t}$ term. In other words, we review constraints where the
 new meta solution might make a difference.
 \begin{enumerate}
-  \item If we have $x \in \FreeVars(B[\theta])$, where $x$ occurs rigidly in
-    $B[\theta]$, i.e.\ the occurrence is not in a spine of a meta, then no
-    metasubstitution can possibly remove this occurrence. In this case the
-    constraint holds vacuously, so we can use the \LabTirName{metasub/constancy}
-    rule to return a $\theta'$ substitution which also solves the constraint.
+\item If we have $x \in \FreeVars(B[\theta])$, where $x$ occurs rigidly in
+  $B[\theta]$, i.e.\ the occurrence is not inside a spine of a meta, then no
+  metasubstitution can possibly remove this occurrence. In this case the
+  constraint holds vacuously, so we can use the \LabTirName{metasub/constancy}
+  rule to return a $\theta'$ substitution which also solves the constraint.
   \item If we have $x \notin \FreeVars(B[\theta])$, we recursively unify
     $A[\theta]$ with $\epsilon$. If that succeeds, we get a $\theta'$ which
-    unifies $A[\theta]$ and $\epsilon$ and thus forces the constraint to hold, so we
-    can again use \LabTirName{metasub/constancy} to solve the constraint.
+    unifies $A[\theta]$ and $\epsilon$ and thus forces the constraint to hold,
+    so we can again use \LabTirName{metasub/constancy} to solve the constraint.
   \item
     In any other case we simply return $\theta$ and keep the constraint around.
 \end{enumerate}
@@ -1472,7 +1490,7 @@ some examples of the algorithm in action.
 
 
 \begin{example}
-We return to the $polyList$ example from Section \ref{sec:issues}. We trace
+We return to the $\mi{polyList}$ example from Section \ref{sec:issues}. We trace
 elaboration using the extended algorithm.
 \begin{alignat*}{3}
   & \scriptstyle{0 }\qquad\qquad && \echeckt{cons\,(\lambda\,x.\,x)\,nil}{(List\,(\{A : \U\}\to A \to A))}
@@ -1856,7 +1874,7 @@ type theory, and only add modest extensions.
 Often it is the case that constructions on dependent type theory are forced to
 be more principled and structured than constructions on less powerful theories,
 because the many interactions and intricacies leave less room for whims. In our
-case, we believe that focusing on dependent type theory helped us hone in on the
+case, we believe that focusing on dependent type theory helped us home in on the
 essential parts of the problem, and it is likely that restrictions of our
 solution would be also favorably simple and powerful in simpler settings such as
 System F.
