@@ -482,6 +482,7 @@ the same way as in Agda.  This can be used to give let-definitions without type
 annotation, as in $\slet\,x : \_ = \U\,\sin\,x$.
 
 \subsection{Core syntax}
+\label{sec:core}
 
 Figure \ref{fig:plaincore} lists selected rules of the core language.
 
@@ -497,10 +498,11 @@ important for defining more involved example programs\footnote{In presentations
   of dependent type theories without explicit substitutions, the $\slet$ rule is
   not derivable from function application, unlike in simple type theories.}.
 
-The universe $\U$ is Russell-style, and we have the type-in-type rule.
-This causes our core syntax to be non-total, and our elaboration algorithm to be
-possibly non-terminating. We use type-in-type to simplify presentation, since
-consistent universe setups are orthogonal to the focus of this work.
+The universe $\U$ is Russell-style, and we have the type-in-type rule.  This
+causes our core syntax to be non-total, and our elaboration algorithm to be
+possibly non-terminating. Consistent universe setups are straightforward to
+devise, but they are orthogonal to the focus of this work, and we choose to
+avoid needless noise.
 
 Function types only differ from each other in notation: implicit
 functions have the same rules as ``explicit'' functions. The primary purpose of
@@ -821,14 +823,6 @@ We present the specifications and definitions below, then we describe them in or
                  \echeck{B}{\Theta_2}{\Gamma[\theta_1],\,x : A'}{\U}\\
   &\quad\ereturn\,(\Theta_2,\,\theta_{12},
                  \,(\{x : A'[\theta_2]\}\to B'),\,\U)\\
-  &\einfer{\lambda\,x.\,t}{\Theta_0}{\Gamma} :\equiv \edo \\
-  &\quad \slet\, (\Theta_1,\,\theta_1,\,A) = \freshMeta{\Theta_0}{\Gamma}{\U}\\
-  &\quad(\Theta_2,\,\theta_2,\,t',\,B)\leftarrow \einsert\,(\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:A})\\
-  &\quad\ereturn\,(\Theta_2,\,\theta_{12},\,\lambda\,x.\,t',\,(x : A[\theta_2])\to B)\\
-  &\einfer{\lambda\,\{x\}.\,t}{\Theta_0}{\Gamma} :\equiv \edo \\
-  &\quad \slet\,(\Theta_1,\,\theta_1,\,A) = \freshMeta{\Theta_0}{\Gamma}{\U}\\
-  &\quad(\Theta_2,\,\theta_2,\,t',\,B)\leftarrow \einsert\,(\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:A})\\
-  &\quad\ereturn\,(\Theta_2,\,\theta_{12},\,\lambda\,\{x\}.\,t',\,\{x : A[\theta_2]\}\to B)\\
   &\einfer{t\,u}{\Theta_0}{\Gamma} :\equiv \edo \\
   &\quad (\Theta_1,\,\theta_1,\,t',\,A) \leftarrow \einsert\,(\einfer{t}{\Theta_0}{\Gamma})\\
   &\quad \slet\,(\Theta_2,\,\theta_2,A_0) = \freshMeta{\Theta_1}{\Gamma[\theta_1]}{\U}\\
@@ -842,7 +836,15 @@ We present the specifications and definitions below, then we describe them in or
   &\quad \slet\,(\Theta_3,\,\theta_3,A_1) = \freshMeta{\Theta_2}{\Gamma[\theta_{12}],\,x:A_0}{\U}\\
   &\quad (\Theta_4,\,\theta_4) \leftarrow \unify\,(A[\theta_{23}])\,(\{x : A_0[\theta_3]\}\to A_1)\\
   &\quad (\Theta_5,\,\theta_5,\,u') \leftarrow \echeck{u}{\Theta_4}{\Gamma[\theta_{1234}]}{(A_0[\theta_{34}])}\\
-  &\quad \ereturn\,(\Theta_5,\,\theta_{12345},\,(t'[\theta_{2345}])\,\{u'\},\,A_1[\theta_{45}][x\mapsto u'])\\
+                 &\quad \ereturn\,(\Theta_5,\,\theta_{12345},\,(t'[\theta_{2345}])\,\{u'\},\,A_1[\theta_{45}][x\mapsto u'])\\
+  &\einfer{\lambda\,x.\,t}{\Theta_0}{\Gamma} :\equiv \edo \\
+  &\quad \slet\, (\Theta_1,\,\theta_1,\,A) = \freshMeta{\Theta_0}{\Gamma}{\U}\\
+  &\quad(\Theta_2,\,\theta_2,\,t',\,B)\leftarrow \einsert\,(\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:A})\\
+  &\quad\ereturn\,(\Theta_2,\,\theta_{12},\,\lambda\,x.\,t',\,(x : A[\theta_2])\to B)\\
+  &\einfer{\lambda\,\{x\}.\,t}{\Theta_0}{\Gamma} :\equiv \edo \\
+  &\quad \slet\,(\Theta_1,\,\theta_1,\,A) = \freshMeta{\Theta_0}{\Gamma}{\U}\\
+  &\quad(\Theta_2,\,\theta_2,\,t',\,B)\leftarrow \einsert\,(\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:A})\\
+  &\quad\ereturn\,(\Theta_2,\,\theta_{12},\,\lambda\,\{x\}.\,t',\,\{x : A[\theta_2]\}\to B)\\
   &\einfer{\slet\,x:A=t\,\sin\,u}{\Theta_0}{\Gamma} :\equiv \edo \\
   &\quad(\Theta_1,\,\theta_1,\,A') \leftarrow \echeck{A}{\Theta_0}{\Gamma}{\U}\\
   &\quad(\Theta_2,\,\theta_2,\,t') \leftarrow \echeck{t}
@@ -905,9 +907,7 @@ inferred types.
 
 For $\einfer{x}{\Theta}{\Gamma}$, we look up the type of $x$ in $\Gamma$. In the
 case of $\U$, we always succeed and infer $\U$ as type. In the cases for
-function types, we check that the domains and codomains have type $\U$.  For
-$\lambda$-s, we create a fresh meta for the domain type (since our surface
-$\lambda$-s are not annotated), and infer types for the bodies.
+function types, we check that the domains and codomains have type $\U$.
 
 The $\einfer{t\,u}{\Theta_0}{\Gamma}$ and $\einfer{t\,\{u\}}{\Theta_0}{\Gamma}$
 cases are again interesting. Here, we first infer a type for $t$, then refine
@@ -936,6 +936,21 @@ It would be more efficient (and also allow more user-friendly error
 messages) to not immediately refine the inferred type of $t$ to a function type,
 but rather match on the inferred type, and only perform refining when the type
 is meta-headed. We present the unoptimized version here for the sake of brevity.
+
+For $\lambda$-s, we create a fresh meta for the domain type (since our surface
+$\lambda$-s are not annotated), and infer types for the bodies. Note the eager
+insertion in $\einsert\,(\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:A})$. This
+causes, somewhat unexpectedly, the following example to fail:
+\begin{alignat*}{3}
+  & \slet\,f : \_ = \lambda\,A\,\{B\}.\,A\,\sin\,\\
+  & \slet\,g : \U \to \{B : \U\}\to U = f\,\sin\,...
+\end{alignat*}
+The issue here is that we immediately apply the elaborated $\lambda\{B\}.\,A$
+expression to a fresh meta, which causes the implicit function type to disappear
+from the result, and preventing types to unify on the following line. We could
+repair this by blocking insertion for implicit $\lambda$-s, but we choose to
+keep the algorithm as simple as possible, and in any case overeager insertion
+can be fixed by using type annotations to stay in checking mode.
 
 In the case of $\slet$, inference again just falls through, and we infer a type
 for the $\slet$ body. For $\einfer{\_}{\Theta}{\Gamma}$, we create a fresh meta
@@ -970,13 +985,16 @@ paper. For an example of what this would entail, in \cite{dunfield2013complete}
 completeness means that whenever there is a way to fill in missing details in
 the surface syntax, algorithmic typechecking \emph{always} finds it. In
 ibid.\ this means figuring out domain types for $\lambda$-s and inserting all
-implicit applications. However, our elaborator targets a far stronger theory,
-and it is beyond our reach to succinctly characterize which annotations are
-inferable in the surface language, and we do not know of any prior work which
-accomplishes this for a comparably strong elaborator. Our experience in Agda is
-that it is not tractable in general to figure out which arguments are inferable,
-by looking at function types, and often we have to run elaboration to see what
-works.
+implicit applications. However, we target a far stronger theory, and to our
+knowledge no prior work has attempted to characterize inferable terms or show
+completeness for a comparably strong elaborator. Our experience in Agda is that
+it is not tractable in general to figure out which arguments are inferable, by
+looking at function types, and often we have to run elaboration to see what
+works. This does not imply that type inference with dependent types must
+necessarily be an unwieldy affair. While we lose completeness, we gain the
+ability to infer more parts of programs by following richer type dependencies,
+as well as more power to refine and synthesize terms when types are known
+beforehand.
 
 We can still say something about the behavior of our elaborator. For this, we
 consider a translation from core terms to surface terms, the evident forgetful
@@ -1130,9 +1148,48 @@ judgments. Hence, the sides of the equations must have the same types, and in
 particular the left side of the \LabTirName{${[}{]}$-$\eta$} rule has type
 $\Rec\,\epsilon$.
 
+\subsubsection{On metatheoretical properties of the core syntax}
+We naturally want to make sure that the extended core syntax is still sensible.
+In relation to type theories, the following three properties are commonly
+considered.
+\begin{itemize}
+  \item A theory is \emph{consistent} if not every closed type has a closed
+    inhabitant. An inconsistent theory cannot be used as a \emph{logic}, from
+    the propositions-as-types perspective \cite[Chapter~1]{hottbook}, because
+    there every proposition is provable, so proofs do not distinguish truth from
+    falsehood.
+  \item A theory has the \emph{canonicity} property, if every closed term is
+    definitionally equal to a canonical term. For example, every closed term
+    with a natural number type is a numeral, every $\mathsf{Bool}$ is $\true$ or
+    $\false$ and so on. A canonical theory is useful as a \emph{total
+      programming language}; if canonicity fails, then some programs compute
+    to stuck terms which cannot be viewed as values. In non-total languages,
+    progress and type preservation constitute a weaker analogue of canonicity.
+  \item A theory has \emph{decidable conversion}, if definitional equality is
+    decidable. Undecidable conversion usually implies undecidable type checking
+    for type theories. Often, decidable conversion follows from a normalization
+    procedure for open terms: we first normalize, then decide equality of normal
+    forms.
+\end{itemize}
+
+The properties are listed roughly in the order of increasing
+strength. Canonicity often implies consistency (because empty types have no
+canonical terms), and normalization implies canonicity. Now, our current core
+theory has \emph{none} of the above properties, because the $\U : \U$ rule
+precludes them. However, as we mentioned in Section \ref{sec:core}, this is
+easily fixed by stratified universes.
+
+In any case, a \emph{reduction} of new features to old features is a common and
+convenient strategy to reduce metatheoretical properties of extended theories to
+that of smaller or more conventional theories. In the simplest case, new
+features are definable from old features. Here, we can either assume that new
+features are merely definitional shorthands, or give an evident injective
+translation from the new theory to the old one. Both imply that the desired
+properties transfer from the old theory to the new one.
+
 Telescopes and records are derivable from natural numbers, the unit type and
-$\Sigma$-types. We write $\top$ for the unit type with $\tt : \top$. We use
-Agda-like pattern matching notation in the following.  First, we define
+$\Sigma$-types. We write $\top$ for the unit type, and we have $\tt : \top$. We
+use Agda-like pattern matching notation in the following.  First, we define
 length-indexed telescopes.
 \begin{alignat*}{3}
   & \rlap{$\Tel' : \Nat \to \U$}\\
@@ -1146,13 +1203,10 @@ Then, we have $\Tel :\equiv \Sigma(n : \Nat).\,(\Tel'\,n)$, and define records:
   & \Rec\,(\suc\,n,\,(A,\,B)) &&:\equiv \Sigma(a : A).\,(\Rec\,(n,\,B\,a))
 \end{alignat*}
 From the above, $\epsilon$, $\blank\TCons\blank$, $\blank::\blank$ and ${[}{]}$
-are evident, and all expected equalities hold definitionally. Derivability is
-good news because we inherit nice properties of the type theory which only
-contains the base type formers. For instance, if we have a consistent universe
-setup\footnote{Recall that we currently assume type-in-type, which causes consistency and normalization to fail.}, we inherit consistency, canonicity and decidability of conversion. We
-currently use native telescopes instead of $\Nat$, $\top$ and $\Sigma$ because
-in unification and elaboration it is convenient that we are able to restrict
-some types to records types.
+are evident, and all expected equalities hold definitionally. Hence, it does not
+matter whether telescopes are primitive or derived. In the rest of the paper we never
+need to look inside the representation of telescopes, and we only use the ``interface''
+from Figure \ref{fig:telescopes}.
 
 \begin{figure}[h]
 \begin{mathpar}
@@ -1264,8 +1318,9 @@ Hence, we can derive a somewhat weaker version of curried functions, with
 propositional $\beta$ and $\eta$. From this, we still get consistency and
 canonicity very cheaply. This is because models proving consistency or
 canonicity for the base theory with $\Nat$, $\top$ and $\Sigma$ usually support
-equality reflection. For consistency, standard set-theoretical models and models
-in extensional type theory have this property, for canonicity, glued models
+equality reflection, i.e.\ that propositional equality implies definitional
+equality. For consistency, standard set-theoretical models and models in
+extensional type theory have this property, for canonicity, glued models
 (e.g.\ as in \cite{kaposi2019gluing} and \cite{sterling2019algebraic}) also have
 this property.
 
@@ -1460,9 +1515,10 @@ telescope domain to be empty.
 & \quad (\Theta_1,\,\theta_1) \leftarrow \unify_{\Theta_0|\Gamma}\,A\,\epsilon\\
 & \quad \unify_{\Theta_1|\Gamma[\theta_1]}\,(B[\theta_1][x\mapsto[]])\,(B'[\theta_1])
 \end{alignat*}
-Again, we also have the symmetric case. For $\lambda\,\{x : \ol{A}\}.\,t$ and
-$t\,\{u : \ol{A}\}$, unification is structural, and other cases remain the same
-as in the basic elaborator of Section \ref{sec:bidirectional_elaboration}.
+Again, we also have the symmetric case. For telescopes, $\Rec$, inhabitants of
+$\Rec$, curried abstraction and application, unification is structural, and
+other cases remain the same as in the basic elaborator of Section
+\ref{sec:bidirectional_elaboration}.
 
 \subsection{Elaboration}
 

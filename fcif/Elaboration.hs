@@ -423,7 +423,9 @@ check cxt topT ~topA = case (topT, force topA) of
     dom <- freshMeta cxt VTel
     let vdom = eval (cxt^.vals) dom
     let cxt' = bind x NOInserted (VRec vdom) cxt
-    (t, liftVal cxt -> a) <- insert cxt' $ infer cxt' t
+    let ins = case t of RLam _ _ Impl _ -> insert cxt' -- id
+                        _               -> insert cxt'
+    (t, liftVal cxt -> a) <- ins $ infer cxt' t
     newConstancy cxt vdom a
     unifyWhile cxt topA (VPiTel x vdom a)
     pure $ LamTel x dom t
@@ -518,7 +520,10 @@ infer cxt = \case
       Nothing  -> freshMeta cxt VU
     let ~va = eval (cxt^.vals) a
     let cxt' = bind x NOSource va cxt
-    (t, liftVal cxt -> b) <- insert cxt' $ infer cxt' t
+    -- (t, liftVal cxt -> b) <- infer cxt' t
+    let ins = case t of RLam _ _ Impl _ -> insert cxt'
+                        _               -> insert cxt'
+    (t, liftVal cxt -> b) <- ins $ infer cxt' t
     pure (Lam x i a t, VPi x i va b)
 
   RHole -> do
