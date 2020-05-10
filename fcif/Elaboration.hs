@@ -423,7 +423,7 @@ check cxt topT ~topA = case (topT, force topA) of
     dom <- freshMeta cxt VTel
     let vdom = eval (cxt^.vals) dom
     let cxt' = bind x NOInserted (VRec vdom) cxt
-    let ins = case t of RLam _ _ Impl _ -> insert cxt' -- id
+    let ins = case t of RLam _ _ Impl _ -> id
                         _               -> insert cxt'
     (t, liftVal cxt -> a) <- ins $ infer cxt' t
     newConstancy cxt vdom a
@@ -521,7 +521,7 @@ infer cxt = \case
     let ~va = eval (cxt^.vals) a
     let cxt' = bind x NOSource va cxt
     -- (t, liftVal cxt -> b) <- infer cxt' t
-    let ins = case t of RLam _ _ Impl _ -> insert cxt'
+    let ins = case t of RLam _ _ Impl _ -> id
                         _               -> insert cxt'
     (t, liftVal cxt -> b) <- ins $ infer cxt' t
     pure (Lam x i a t, VPi x i va b)

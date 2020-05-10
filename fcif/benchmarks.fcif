@@ -189,11 +189,13 @@ let bar : ({n : Int} → Int → Int) → (Int → Int)
 -- let e1 = λ f. pair (f {zero} zero) (f zero) in   -- never works bc of non-pattern eq
 
 -- let e2 = λ f (x : Int). pair (f x) (f {x} x) in
-let e2 = λ f (x : Int). pair (f {x} x) (f x) in
+let e2 = λ f x. pair (f {x} x) (f x) in
 
 -- let bar = let foo = λ _. id in the (Int → Int → Int) foo in
 
-let bar : List IdTy = map (λ _. id) ids in
+-- let bar : List IdTy = map (λ _. id) ids in
+
+let bar = λ f. f {zero} in
 
 -- let f = λ A {B}. A in
 -- let g : U → {B : U} → U = f in

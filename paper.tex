@@ -1853,14 +1853,56 @@ Secondly, FCIF supports global inference. For an example for global inference,
 $\slet\,x : \_ = \mi{single}\,\mi{id}\,\sin\,$
 $\mi{cons}\,\{\mi{IdTy}\}\,x\,\mi{nil}$ works in FCIF, MLF and HML but does not
 work in GI, QL and HMF. MLF and HML work here by immediately giving a principal
-type to $single\,id$ which involves generalization with a subtyping bound. In
+type to $\mi{single}\,\mi{id}$ which involves generalization with a subtyping bound. In
 contrast, FCIF makes no promises about principal typing --- which is not
 feasible with dependent types --- and does no generalization, but it can still
-infer a type for $id$ which can be later constrained to $IdTy$.
+infer a type for $\mi{id}$ which can be later constrained to $\mi{IdTy}$.
 
 
-\subsection{Inferring Polymorphic Types for Function Arguments}
+\subsection{Polymorphic Argument Inference and Curried Application Insertion}
 \label{sec:appinsert}
+
+FCIF cannot infer the $B1$ and $B2$ cases on Figure \ref{fig:benchmark}, which
+would require inferring polymorphic types for function arguments. In very simple
+cases, FCIF is able to infer (ambiguous) polymorphic argument types. For
+example, it can infer a type for $(\lambda\,f.\,f\{\mi{zero}\})$. Assuming
+$\mi{Pair} : \U \to \U \to \U$ and $\mi{pair}: \{A\,B : \U\}\to A \to B \to
+\mi{Pair}\,A\,B$, it can also infer type for the following:
+\[
+    \lambda\,f\,x.\,\mi{pair}\,(f\,\{x\}\,x)\,(f\,x)
+\]
+Here, FCIF can proceed because it first encounters $(f\,\{x\}\,x)$, where it
+learns that $f$ should have two arguments, where the first one is implicit.
+Armed with this knowledge, it inserts a fresh meta in $(f\,x)$. The following
+fails though:
+\[
+    \lambda\,f\,x.\,\mi{pair}\,(f\,x)\,(f\,\{x\}\,x)
+\]
+Now, FCIF decides upon elaborating $(f\,x)$ that $f$ is a function whose first
+argument is explicit, and fails at $f\,\{x\}$. This is similar to the implicit
+$\lambda$ insertion issue, but here we would have to refine implicit
+applications. We could try inserting an unknown curried application after the
+first $f$, which could be later refined. We sketch an extension of elaboration
+which could possibly handle this example. We extend insertion with
+the case which inserts a new curried application whenever we have a meta-headed
+type. We omit metacontexts and metasubstitutions for brevity.
+\begin{alignat*}{3}
+& \einsert\,(t,\,\alpha\,\ol{u}) :\equiv \edo \\
+& \quad A \leftarrow \mathsf{freshMeta}_{\Gamma}\,\Tel\\
+& \quad B \leftarrow \mathsf{freshMeta}_{\Gamma,\,x: \Rec\,A}\,\U\\
+& \quad \unify\,(\alpha\,\ol{u})\,(\{x : \ol{A}\} \to B)\\
+& \quad \mathsf{newConstancy}_{\Gamma, x : \Rec\,A}\,B\\
+& \quad u \leftarrow \mathsf{freshMeta}_{\Gamma}\,(\Rec\,A)\\
+& \quad \ereturn\,(t\,\{u : \ol{A}\},\,B[x \mapsto u])
+\end{alignat*}
+
+
+
+%% let e2 = λ f (x : Int). pair (f {id {Int} x} x) (f x) in
+
+
+
+
 
 It is apparent from the $B1$ and $B2$ cases on Figure \ref{fig:benchmark} that FCIF
 cannot infer implicit function types for function arguments.  MLF is the only
