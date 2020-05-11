@@ -1159,12 +1159,12 @@ considered.
     there every proposition is provable, so proofs do not distinguish truth from
     falsehood.
   \item A theory has the \emph{canonicity} property, if every closed term is
-    definitionally equal to a canonical term. For example, every closed term
-    with a natural number type is a numeral, every $\mathsf{Bool}$ is $\true$ or
-    $\false$ and so on. A canonical theory is useful as a \emph{total
-      programming language}; if canonicity fails, then some programs compute
-    to stuck terms which cannot be viewed as values. In non-total languages,
-    progress and type preservation constitute a weaker analogue of canonicity.
+    definitionally equal to a canonical term. For example, every closed natural
+    number is a numeral, every $\mathsf{Bool}$ is $\true$ or $\false$ and so
+    on. A canonical theory is useful as a \emph{total programming language}; if
+    canonicity fails, then some programs compute to stuck terms which cannot be
+    viewed as values. In non-total languages, progress and type preservation
+    constitute a weaker analogue of canonicity.
   \item A theory has \emph{decidable conversion}, if definitional equality is
     decidable. Undecidable conversion usually implies undecidable type checking
     for type theories. Often, decidable conversion follows from a normalization
@@ -1181,11 +1181,12 @@ easily fixed by stratified universes.
 
 In any case, a \emph{reduction} of new features to old features is a common and
 convenient strategy to reduce metatheoretical properties of extended theories to
-that of smaller or more conventional theories. In the simplest case, new
-features are definable from old features. Here, we can either assume that new
-features are merely definitional shorthands, or give an evident injective
-translation from the new theory to the old one. Both imply that the desired
-properties transfer from the old theory to the new one.
+that of smaller or better-known theories. See \citet{next700} for a collection
+of examples for this. In the simplest case, new features are definable from old
+features. Here, we can either assume that new features are merely definitional
+shorthands, or give an evident injective translation from the new theory to the
+old one. Both imply that the desired properties transfer from the old theory to
+the new one.
 
 Telescopes and records are derivable from natural numbers, the unit type and
 $\Sigma$-types. We write $\top$ for the unit type, and we have $\tt : \top$. We
@@ -1740,8 +1741,8 @@ neutral applications is rather ad-hoc.
   & \mi{ids}    && : \mi{List}\,IdTy                                          && \mi{choose} && : \{A : \U\} \to A \to A \to A                       \\
   & \mi{nil}    && : \{A : \U\}\to \mi{List}\,A                               && \mi{app}    && : \{A\,B : \U\} \to (A \to B) \to A \to B            \\
   & \mi{cons}   && : \{A : \U\} \to A \to \mi{List}\,A \to \mi{List}\,A            && \mi{revapp} && : \{A\,B : \U\} \to A \to (A \to B) \to B            \\
-  & \mi{head}   && : \{A : \U\} \to \mi{List}\,A \to A                        && \mi{runST}  && : \{A : \U\} \to (\{S : \U\} \to \mi{ST}\,S\,A) \to A     \\
-  & \mi{tail}   && : \{A : \U\} \to \mi{List}\,A \to \mi{List}\,A                  && \mi{argST}  && : \{S : \U\}\to \mi{ST}\,S\,\mi{Int}                           \\
+  & \mi{head}   && : \{A : \U\} \to \mi{List}\,A \to A                        && \mi{runST}  && : \{A : \U\} \to (\{S : \U\} \to \mi{ST}\,\,S\,A) \to A     \\
+  & \mi{tail}   && : \{A : \U\} \to \mi{List}\,A \to \mi{List}\,A                  && \mi{argST}  && : \{S : \U\}\to \mi{ST}\,\,S\,\mi{Int}                           \\
   & \mi{map}    && : \{A\,B : \U\} \to (A \to B) \to \mi{List}\,A \to \mi{List}\,B && \mi{poly}   && : IdTy \to \mi{Pair}\,\mi{Int}\,\mi{Bool}
 \end{alignat*}
 \caption{Types used in Figure \ref{fig:benchmark}.}
@@ -1878,14 +1879,13 @@ fails though:
 \[
     \lambda\,f\,x.\,\mi{pair}\,(f\,x)\,(f\,\{x\}\,x)
 \]
-Now, FCIF decides upon elaborating $(f\,x)$ that $f$ is a function whose first
+Here, FCIF decides upon elaborating $(f\,x)$ that $f$ is a function whose first
 argument is explicit, and fails at $f\,\{x\}$. This is similar to the implicit
 $\lambda$ insertion issue, but here we would have to refine implicit
 applications. We could try inserting an unknown curried application after the
-first $f$, which could be later refined. We sketch an extension of elaboration
-which could possibly handle this example. We extend insertion with
-the case which inserts a new curried application whenever we have a meta-headed
-type. We omit metacontexts and metasubstitutions for brevity.
+first $f$, which could be later refined. Below we sketch an extension of
+$\einsert$ which accomplishes this. We omit metacontexts and metasubstitutions
+for brevity.
 \begin{alignat*}{3}
 & \einsert\,(t,\,\alpha\,\ol{u}) :\equiv \edo \\
 & \quad A \leftarrow \mathsf{freshMeta}_{\Gamma}\,\Tel\\
@@ -1896,57 +1896,100 @@ type. We omit metacontexts and metasubstitutions for brevity.
 & \quad \ereturn\,(t\,\{u : \ol{A}\},\,B[x \mapsto u])
 \end{alignat*}
 
+However, this alone does not work: in $t\,\{u : \ol{A}\}$, we return a term
+applied to a record with \emph{unknown telescope type}, which later may give
+rise to unification problems where metas are applied to such unknown telescopes.
+Our current unification algorithm does not handle these cases meaningfully, and
+we are not aware of any applicable algorithm in prior literature.
 
+A robust system for this would give a solution for polymorphic argument
+inference. We do not expect that this is easy. The only prior work which
+supports this feature is MLF, and recall that MLF's inference algorithms are
+already very complex, and MLF does not support dependent types.
 
-%% let e2 = λ f (x : Int). pair (f {id {Int} x} x) (f x) in
-
-
-
-
-
-It is apparent from the $B1$ and $B2$ cases on Figure \ref{fig:benchmark} that FCIF
-cannot infer implicit function types for function arguments.  MLF is the only
-system which can do this, in cases where the polymorphic argument is used only
-once. Consider the following:
+We nevertheless sketch a solution, which is not yet fleshed out, but could be
+developed in future work. We work with the following example:
 \[
   \slet\,f : \mi{IdTy} \to \mi{Bool} = \lambda\,\_.\,\mi{true}\,\sin\,\lambda\,x.\,f\,x
-  \]
-FCIF will attempt to elaborate $f\,x$ to $f\,(\lambda\{A\}.\,x)$, but fails to
-infer a type for $x$, because $A$ is not in the scope of $x$'s type. We sketch
-an extension of FCIF with \emph{curried application insertion}, which could
-possibly handle this example. We extend insertion with the following case. We
-omit metacontexts and metasubstitutions for brevity.
-\begin{alignat*}{3}
-& \einsert\,(t,\,\alpha\,\ol{u}) :\equiv \edo \\
-& \quad A \leftarrow \mathsf{freshMeta}_{\Gamma}\,\Tel\\
-& \quad B \leftarrow \mathsf{freshMeta}_{\Gamma,\,x: \Rec\,A}\,\U\\
-& \quad \unify\,(\alpha\,\ol{u})\,(\{x : \ol{A}\} \to B)\\
-& \quad \mathsf{newConstancy}_{\Gamma, x : \Rec\,A}\,B\\
-& \quad u \leftarrow \mathsf{freshMeta}_{\Gamma}\,(\Rec\,A)\\
-& \quad \ereturn\,(t\,\{u : \ol{A}\},\,B[x \mapsto u])
-\end{alignat*}
-In short, we insert a new curried application whenever we $\einsert$ with
-meta-headed type. Now, elaboration returns
-$f\,(\lambda\,\{A\}.\,x\,\{\alpha_2\,x\,A : \ol{\alpha_0}\})$, and right before
-we try to unify expected and inferred types, we have $x : \{y :
-\ol{\alpha_0}\}\to \alpha_1\,\{y : \ol{\alpha_0}\}$, and we have to compute
-$\unify\,(\alpha_1\,\{\alpha_2\,x\,A : \ol{\alpha_0}\})\,(A \to A)$. This
-problem does not fall in any usual pattern fragment, and does not have an
-obvious most general solution. However, it is reasonable to make the following
-assumption: metas which return in unknown record types, like $\alpha_2$, are
-only solved with \emph{order-preserving embeddings}, so for $\alpha_2$ the four
-potential solutions are $(\lambda\,x\,A.\,[])$, $(\lambda\,x\,A.\,(A :: []))$,
-$(\lambda\,x\,A.\,(x :: []))$ and $(\lambda\,x\,A.\,(x :: A :: []))$\footnote{Technically, we could also allow permutations such as $\lambda\,x\,A.\,(A :: x :: [])$, but these are superfluous since nothing in our system depends on the ordering of permutable function arguments.}. The reason
-for only allowing such solutions is that these can possibly yield solvable
-pattern unification problems, while solutions containing arbitrary terms or
-non-linear variable occurrences cannot. Out of these, $(\lambda\,x\,A.\,(x :: A
-:: []))$ and $(\lambda\,x\,A.\,(x :: []))$ are ruled out because they would
-require a cyclic solution for $\alpha_0$, and $(\lambda\,x\,A.\,[])$ is ruled
-out because it would yield the unsolvable $\unify\,\alpha_1\,(A \to A)$
-problem. Thus, $(\lambda\,x\,A.\,(A :: []))$ is the unique order-preserving
-embedding solution in this case, which does yield the expected elaboration
-output. However, this idea is far from being fully fleshed out, and it
-could be subject of future research.
+\]
+Plain FCIF will attempt to elaborate $f\,x$ to $f\,(\lambda\{A\}.\,x)$, but
+fails to infer a type for $x$, because $A$ is not in the scope of $x$'s type.
+FCIF with curried application insertion instead returns
+$f\,(\lambda\,\{A\}.\,x\,\{\alpha_2\,x\,A : \ol{\alpha_0}\})$ for the same
+expression, and we also have $x : \{y : \ol{\alpha_0}\}\to \alpha_1\,\{y :
+\ol{\alpha_0}\}$. However, at this point FCIF still needs to unify expected and
+inferred types, so it needs to compute
+\[
+\unify\,(\alpha_1\,\{\alpha_2\,x\,A : \ol{\alpha_0}\})\,(A \to A)
+\]
+This does not fall into any pattern fragment, and has no most general solution.
+However, we may make several assumptions about unknown telescopes in spines. We
+can view this as an extension of Miller's pattern unification
+\cite{millerpattern} with unknown spine slices: $\alpha_2\,x\,A$ stands for a
+part of the spine which may contain bound variables $x$ and $A$. We make the
+following assumption: $\alpha_2$ may be only solved with \emph{order-preserving
+  embeddings}, so the four potential solutions are $(\lambda\,x\,A.\,[])$,
+$(\lambda\,x\,A.\,(A :: []))$, $(\lambda\,x\,A.\,(x :: []))$ and
+$(\lambda\,x\,A.\,(x :: A :: []))$. On the one hand, this rules out solutions
+which contain arbitrary terms or non-linear variable occurrences, which would
+yield unsolvable patterns. On the other hand, we probably do not throw away many
+useful solutions, because all curried applications arise from elaboration, and
+we do not have to deal with any of them coming from the surface language. In
+short, we try to keep the invariant that metas returning in record types are
+only ever solved with order-preserving embeddings.
+
+Out of the four possible embeddings, $(\lambda\,x\,A.\,(x :: A :: []))$ and
+$(\lambda\,x\,A.\,(x :: []))$ are ruled out because they would require a cyclic
+solution for $\alpha_0$, and $(\lambda\,x\,A.\,[])$ is ruled out because it
+would yield the unsolvable $\unify\,\alpha_1\,(A \to A)$ problem. Thus,
+$(\lambda\,x\,A.\,(A :: []))$ is the unique order-preserving embedding solution
+in this case, which does yield the expected elaboration output. We note though
+that ``unique order-preserving embedding'' does not yet provide an efficient
+algorithmic implementation, and we would need to be smarter in considering
+particular unification problems, to avoid backtracking through possible
+solutions.
+
+%% It is apparent from the $B1$ and $B2$ cases on Figure \ref{fig:benchmark} that FCIF
+%% cannot infer implicit function types for function arguments.  MLF is the only
+%% system which can do this, in cases where the polymorphic argument is used only
+%% once. Consider the following:
+
+%% FCIF will attempt to elaborate $f\,x$ to $f\,(\lambda\{A\}.\,x)$, but fails to
+%% infer a type for $x$, because $A$ is not in the scope of $x$'s type. We sketch
+%% an extension of FCIF with \emph{curried application insertion}, which could
+%% possibly handle this example. We extend insertion with the following case. We
+%% omit metacontexts and metasubstitutions for brevity.
+%% \begin{alignat*}{3}
+%% & \einsert\,(t,\,\alpha\,\ol{u}) :\equiv \edo \\
+%% & \quad A \leftarrow \mathsf{freshMeta}_{\Gamma}\,\Tel\\
+%% & \quad B \leftarrow \mathsf{freshMeta}_{\Gamma,\,x: \Rec\,A}\,\U\\
+%% & \quad \unify\,(\alpha\,\ol{u})\,(\{x : \ol{A}\} \to B)\\
+%% & \quad \mathsf{newConstancy}_{\Gamma, x : \Rec\,A}\,B\\
+%% & \quad u \leftarrow \mathsf{freshMeta}_{\Gamma}\,(\Rec\,A)\\
+%% & \quad \ereturn\,(t\,\{u : \ol{A}\},\,B[x \mapsto u])
+%% \end{alignat*}
+%% In short, we insert a new curried application whenever we $\einsert$ with
+%% meta-headed type. Now, elaboration returns
+%% $f\,(\lambda\,\{A\}.\,x\,\{\alpha_2\,x\,A : \ol{\alpha_0}\})$, and right before
+%% we try to unify expected and inferred types, we have $x : \{y :
+%% \ol{\alpha_0}\}\to \alpha_1\,\{y : \ol{\alpha_0}\}$, and we have to compute
+%% $\unify\,(\alpha_1\,\{\alpha_2\,x\,A : \ol{\alpha_0}\})\,(A \to A)$. This
+%% problem does not fall in any usual pattern fragment, and does not have an
+%% obvious most general solution. However, it is reasonable to make the following
+%% assumption: metas which return in unknown record types, like $\alpha_2$, are
+%% only solved with \emph{order-preserving embeddings}, so for $\alpha_2$ the four
+%% potential solutions are $(\lambda\,x\,A.\,[])$, $(\lambda\,x\,A.\,(A :: []))$,
+%% $(\lambda\,x\,A.\,(x :: []))$ and $(\lambda\,x\,A.\,(x :: A :: []))$\footnote{Technically, we could also allow permutations such as $\lambda\,x\,A.\,(A :: x :: [])$, but these are superfluous since nothing in our system depends on the ordering of permutable function arguments.}. The reason
+%% for only allowing such solutions is that these can possibly yield solvable
+%% pattern unification problems, while solutions containing arbitrary terms or
+%% non-linear variable occurrences cannot. Out of these, $(\lambda\,x\,A.\,(x :: A
+%% :: []))$ and $(\lambda\,x\,A.\,(x :: []))$ are ruled out because they would
+%% require a cyclic solution for $\alpha_0$, and $(\lambda\,x\,A.\,[])$ is ruled
+%% out because it would yield the unsolvable $\unify\,\alpha_1\,(A \to A)$
+%% problem. Thus, $(\lambda\,x\,A.\,(A :: []))$ is the unique order-preserving
+%% embedding solution in this case, which does yield the expected elaboration
+%% output. However, this idea is far from being fully fleshed out, and it
+%% could be subject of future research.
 
 \section{Conclusion and Future Work}
 
