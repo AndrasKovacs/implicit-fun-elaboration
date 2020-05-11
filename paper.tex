@@ -843,11 +843,13 @@ We present the specifications and definitions below, then we describe them in or
                  &\quad \ereturn\,(\Theta_5,\,\theta_{12345},\,(t'[\theta_{2345}])\,\{u'\},\,A_1[\theta_{45}][x\mapsto u'])\\
   &\einfer{\lambda\,x.\,t}{\Theta_0}{\Gamma} :\equiv \edo \\
   &\quad \slet\, (\Theta_1,\,\theta_1,\,A) = \freshMeta{\Theta_0}{\Gamma}{\U}\\
-  &\quad(\Theta_2,\,\theta_2,\,t',\,B)\leftarrow \einsert\,(\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:A})\\
+  &\quad(\Theta_2,\,\theta_2,\,t',\,B)\leftarrow \eif\,t = \lambda\{y\}.\,u\,\ethen\,\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:A}\\
+  &\quad\quad\hspace{12em} \eelse\,\einsert(\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:A}) \\
   &\quad\ereturn\,(\Theta_2,\,\theta_{12},\,\lambda\,x.\,t',\,(x : A[\theta_2])\to B)\\
   &\einfer{\lambda\,\{x\}.\,t}{\Theta_0}{\Gamma} :\equiv \edo \\
   &\quad \slet\,(\Theta_1,\,\theta_1,\,A) = \freshMeta{\Theta_0}{\Gamma}{\U}\\
-  &\quad(\Theta_2,\,\theta_2,\,t',\,B)\leftarrow \einsert\,(\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:A})\\
+  &\quad(\Theta_2,\,\theta_2,\,t',\,B)\leftarrow \eif\,t = \lambda\{y\}.\,u\,\ethen\,\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:A}\\
+  &\quad\quad\hspace{12em} \eelse\,\einsert(\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:A}) \\
   &\quad\ereturn\,(\Theta_2,\,\theta_{12},\,\lambda\,\{x\}.\,t',\,\{x : A[\theta_2]\}\to B)\\
   &\einfer{\slet\,x:A=t\,\sin\,u}{\Theta_0}{\Gamma} :\equiv \edo \\
   &\quad(\Theta_1,\,\theta_1,\,A') \leftarrow \echeck{A}{\Theta_0}{\Gamma}{\U}\\
@@ -942,19 +944,23 @@ but rather match on the inferred type, and only perform refining when the type
 is meta-headed. We present the unoptimized version here for the sake of brevity.
 
 For $\lambda$-s, we create a fresh meta for the domain type (since our surface
-$\lambda$-s are not annotated), and infer types for the bodies. Note the eager
-insertion in $\einsert\,(\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:A})$. This
-causes, somewhat unexpectedly, the following example to fail:
+$\lambda$-s are not annotated), and infer types for the bodies. Note the extra
+branching: we avoid insertion when the body is an implicit function, as in this
+case this would yield a superfluous $\beta$-redex. We mainly do this in order to
+match the insertion behavior of Agda, where the following definition works as
+expected, without any over-eager insertion in the inner implicit $\lambda$.
+\[
+  \slet\,\mi{const} = \lambda\{A : \Set\}\{B : \Set\}(x : A)(y : B) \to x\,\sin\,...
+\]
+We do not have type-annotated $\lambda$-s in our system, but we can still
+observe some examples which type-check with Agda-like insertion, and would fail
+without the extra $\eif$ branch, like the following:
 \begin{alignat*}{3}
   & \slet\,f : \_ = \lambda\,A\,\{B\}.\,A\,\sin\,\\
   & \slet\,g : \U \to \{B : \U\}\to U = f\,\sin\,...
 \end{alignat*}
-The issue here is that we immediately apply the elaborated $\lambda\{B\}.\,A$
-expression to a fresh meta, which causes the implicit function type to disappear
-from the result, and preventing types to unify on the following line. We could
-repair this by blocking insertion for implicit $\lambda$-s, but we choose to
-keep the algorithm as simple as possible, and in any case overeager insertion
-can be fixed by using type annotations to stay in checking mode.
+Note though that this is mostly a convenience feature in our prototype implementation,
+which does support type-annotated $\lambda$-s.
 
 In the case of $\slet$, inference again just falls through, and we infer a type
 for the $\slet$ body. For $\einfer{\_}{\Theta}{\Gamma}$, we create a fresh meta
@@ -1559,7 +1565,7 @@ some examples of the algorithm in action.
 \begin{example}
 We return to the $\mi{polyList}$ example from Section \ref{sec:issues}. We trace
 elaboration using the extended algorithm.
-\begin{figure}
+
 \begin{alignat*}{3}
   & \scriptstyle{0 }\qquad\qquad && \echeckt{\mi{cons}\,(\lambda\,x.\,x)\,\mi{nil}}{(\mi{List}\,(\{A : \U\}\to A \to A))}
       \hspace{14em}\\
@@ -1587,7 +1593,6 @@ elaboration using the extended algorithm.
   & \scriptstyle{18} && \qquad \qquad \quad \unify\,A\, A\\
   & \scriptstyle{19} && = \mi{cons}\,\{\{A : \U\}\to A \to A\}\,(\lambda\,\{A\}\,x.\,x)\,(\mi{nil}\,\{\{A : \U\}\to A \to A\})
 \end{alignat*}
-\end{figure}
 We diverge from the previous attempt at line $\scriptstyle{5}$. Here, we check
 $\lambda\,x.\,x$ with the meta $\alpha_0$, so we create a fresh $\alpha_1 :
 \Tel$ meta and wrap the result as $\lambda\,\{y :
@@ -2039,9 +2044,9 @@ In future work, we would like to
       of Section \ref{sec:appinsert}.
 \item Formalize elaboration and unification from an algebraic/categorical perspective, in particular
       give algebraic definitions for the core theories.
-\item Investigate whether features of our elaborator could be implemented in a
-      reasonably practical way in production systems such as Agda. Also, investigate
-      simplifying our algorithm to non-dependent (e.g.\ System F) settings.
+\item Investigate implementing features of our elaborator in production systems
+      such as Agda. Also, investigate simplifying our algorithm to non-dependent
+      (e.g.\ System F) settings.
 \item Investigate completeness and properties related to inferability.
 \end{itemize}
 
