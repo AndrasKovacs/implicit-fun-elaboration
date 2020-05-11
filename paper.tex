@@ -349,9 +349,14 @@ types. In particular, we have that
 First, we present a variant of Norell's bidirectional elaborator
 \cite[Chapter~3]{norell07thesis}. Compared to ibid.\ we make some extensions and
 simplifications; what we end up with can be viewed as a toy version of the
-actual Agda elaborator. In this section, we use it to build the backbone of our
-algorithm and illustrate the key issues. We extend this elaborator in Section
-\ref{sec:extending_elaboration}.
+actual Agda elaborator. Our main goal with the elaborator is to have a setup
+which is as simple as possible, but sufficient to illustrate the enhancements in
+Section \ref{sec:extending_elaboration}, and make it clear that this could be
+used to conservatively extend existing dependently typed languages. Hence, we do
+not have more fine-grained control over metavariable insertion, nor the advanced
+unification algorithms used in Agda \cite{abel2011higher}; all of these are
+orthogonal improvements of the presented system.
+
 \begin{figure}[h]
 \begin{alignat*}{4}
   t,\,u,\,v,\,A,\,B,\,C\, :&:=\quad  && x\hspace{8em}              & \text{variable}                 &  \\
@@ -764,7 +769,6 @@ We present the specifications and definitions below, then we describe them in or
   &\einsert\,(\Theta_1,\,\theta_1,\,t,\,A) && :\equiv&& \ereturn\,(\Theta_1,\,\theta_1,\,t,\,A)\\
   &\einsert\,\fail && :\equiv && \fail
 \end{alignat*}
-\pagebreak
 \begingroup
 \allowdisplaybreaks
 \begin{mathpar}
@@ -1054,11 +1058,13 @@ assume the following:
 List : \U \to \U \qquad nil : \{A : \U\} \to List\,A \qquad
 cons : \{A : \U\} \to A \to List\,A \to List\,A
 \]
-In the following, we present a trace of checking $cons\,(\lambda\,x.\,x)\,nil$
+In Figure \ref{fig:polylist}, we present a trace of checking $cons\,(\lambda\,x.\,x)\,nil$
 at type $List\,(\{A : \U\}\to A \to A)$. We omit context and metacontext
 parameters everywhere, and mark recursive calls by indentation. We also omit
 some checking, inference, implicit insertion and unification calls which are not
 essential for illustration.
+
+\begin{figure}
 \begin{alignat*}{3}
   & \scriptstyle{0 }\qquad\qquad && \echeckt{cons\,(\lambda\,x.\,x)\,nil}{(List\,(\{A : \U\}\to A \to A))}
      \hspace{14em}\\
@@ -1076,6 +1082,9 @@ essential for illustration.
   & \scriptstyle{12} && \qquad \unify\,(\{A : \U\}\to A \to A)\,(\alpha_1\to\alpha_1)\\
   & \scriptstyle{13} && \qquad = \fail
 \end{alignat*}
+\caption{$\mi{polyList}$ elaboration.}
+\label{fig:polylist}
+\end{figure}
 
 Above, we first infer $cons\,(\lambda\,x.\,x)\,nil$, which inserts implicit
 applications to fresh metas in $cons$ and $nil$, and returns $cons\,\{\alpha_1
@@ -1550,6 +1559,7 @@ some examples of the algorithm in action.
 \begin{example}
 We return to the $\mi{polyList}$ example from Section \ref{sec:issues}. We trace
 elaboration using the extended algorithm.
+\begin{figure}
 \begin{alignat*}{3}
   & \scriptstyle{0 }\qquad\qquad && \echeckt{\mi{cons}\,(\lambda\,x.\,x)\,\mi{nil}}{(\mi{List}\,(\{A : \U\}\to A \to A))}
       \hspace{14em}\\
@@ -1577,6 +1587,7 @@ elaboration using the extended algorithm.
   & \scriptstyle{18} && \qquad \qquad \quad \unify\,A\, A\\
   & \scriptstyle{19} && = \mi{cons}\,\{\{A : \U\}\to A \to A\}\,(\lambda\,\{A\}\,x.\,x)\,(\mi{nil}\,\{\{A : \U\}\to A \to A\})
 \end{alignat*}
+\end{figure}
 We diverge from the previous attempt at line $\scriptstyle{5}$. Here, we check
 $\lambda\,x.\,x$ with the meta $\alpha_0$, so we create a fresh $\alpha_1 :
 \Tel$ meta and wrap the result as $\lambda\,\{y :
