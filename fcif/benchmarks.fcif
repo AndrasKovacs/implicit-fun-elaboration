@@ -1,9 +1,9 @@
 
 -- usage e.g : cat example.fcif | fcif elab
 
-- "fcif elab" prints elaboration output.
-- "fcif nf"   prints the normal form of the input.
-- "fcif type" prints the type of the input.
+-- "fcif elab" prints elaboration output.
+-- "fcif nf"   prints the normal form of the input.
+-- "fcif type" prints the type of the input.
 
 -- Examples for elaborating first-class polymorphism from
 --   https://www.microsoft.com/en-us/research/uploads/prod/2017/07/impredicative-pldi18.pdf
