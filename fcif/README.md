@@ -47,6 +47,12 @@ Differences:
 Notation:
 - Metavariables are printed as `?n`, where `n` is an integer, meaning
   the `n`-th fresh metavariable.
+- Sometimes no name is available for a variable from the surface syntax. In this
+  case, the variable is printed as `@n` where `n` is a de Bruijn index. For example,
+  in `let foo : U = U → _`, because the non-dependent function is just a shorthand for
+  a pi type, the codomain metavariable depends on the unnamed `U` domain, which is printed 
+  as a de Bruijn index. It would be an optimization
+  to treat non-dependent functions specially in elaboration, so that no such dependencies are introduced.
 - Inserted binders which arise from curried function insertion are named `Γn`,
   where `n` is an integer. `n` isn't particularly informative, it comes from a
   combination of fresh meta ids and telescope refining.
