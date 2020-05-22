@@ -58,7 +58,7 @@ Notation:
   combination of fresh meta ids and telescope refining.
 - Non-unicode in surface syntax: lambdas can be written as
   `\` and `λ`, and function arrows as `->` and `→`.
-- We print curried functions in the same way as implicit functions. They can be
+- We print curried function types the same way as implicit function types. They can be
   disambiguated visually by having a telescope domain.
 - Curried lambdas are printed as `λ{x : a}. t` where `a` is a telescope.
 - Curried applications are printed as `t {u : a}`, where `a` is a telescope.
