@@ -8,17 +8,18 @@
 
 -- Note: extra features compared to the paper:
 --   - optional type annotations on lambdas, e.g. (λ (A : U). A)
---   - optional omission of type annotation on implicit binder and let,
+--   - optional omission of type annotation on implicit binders and let,
 --     e.g.  let foo = U in foo   and   {A} → A → A
 --   - special treatment of top-level lambdas, e.g. as in this file.
 --     top-level lambdas are printed roughly as formatted in this file, and
---     they are also not printed in spines of unsolved metas in elaboration output.
+--     they are also not printed in spines of unsolved metas in the elaboration output.
 
 -- Note: when we print elaboration output, curried functions are *not* computed away.
---     This is partly because I just haven't yet implemented the evaluator which removes them,
---     (although of course normalization removes them - the point is to *only* compute curried
---      functions!), partly because it is highly useful for debugging and visualizing elaboration
---     to see all inserted curried lambdas.
+--     This is partly because I just haven't yet implemented the evaluator which
+--     removes them, (although of course normalization removes them - the point
+--     is to *only* compute curried functions!), partly because it is useful to see,
+--     for the purpose of illustrating the paper, where each curried lambda insertion
+--     occurred.
 
 -- preliminary types and definitions
 ------------------------------------------------------------
@@ -164,43 +165,3 @@ let E3 =
   λ (r : ({A} → A → {B} → B → B) → Int). r (λ x y. y) in
 
 U
-
--- -- notes
--- ------------------------------------------------------------
-
--- -- (λ x {y} . y) 1 {2}
-
--- -- let foo = λ (i : Int)(j : Int). (λ x {y}. y) i {j} in
-
--- -- let foo = (λ {x}{y}. x) {zero}{zero} in
-
-
--- -- "FCIF cannot infer implicit function types for function arguments":
--- --  but it can: λ f . f {1}.
--- let foo = λ f. f {zero} in
-
--- let bar : ({n : Int} → Int → Int) → (Int → Int)
---     = foo in
-
-
---     -- e1 = λ f . (f 2 , f {3} 4)
---     -- e2 = λ f . (f {3} 4 , f 2)
-
--- -- let e1 = λ f. pair (f {zero} zero) (f zero) in   -- never works bc of non-pattern eq
-
--- -- let e2 = λ f (x : Int). pair (f x) (f {x} x) in
--- let e2 = λ f x. pair (f {x} x) (f x) in
-
--- -- let bar = let foo = λ _. id in the (Int → Int → Int) foo in
-
--- -- let bar : List IdTy = map (λ _. id) ids in
-
--- let bar = λ f. f {zero} in
-
--- -- let f = λ A {B}. A in
--- -- let g : U → {B : U} → U = f in
-
--- -- let f : _ = λ {A}{B} (x : A) (y : B). x in
--- -- let g : {A B : U} → A → B → A = f in
-
--- U

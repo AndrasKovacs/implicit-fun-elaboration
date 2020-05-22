@@ -1,6 +1,7 @@
 
 module Parser (parseString , parseStdin) where
 
+import Control.Monad
 import Data.Char
 import Data.Foldable
 import Data.Void
@@ -35,14 +36,9 @@ keyword x =
   x == "let" || x == "in" || x == "λ" || x == "U"
 
 pIdent :: Parser Name
-pIdent = do
-  o <- getOffset
-  x <- try (takeWhile1P Nothing isAlphaNum <* ws)
-  if keyword x then do
-    setOffset o
-    fail "unexpected keyword, expected an identifier"
-  else
-    pure x
+pIdent = try $ do
+  x <- takeWhile1P Nothing isAlphaNum <* ws
+  x <$ guard (not (keyword x))
 
 pAtom :: Parser Raw
 pAtom  =

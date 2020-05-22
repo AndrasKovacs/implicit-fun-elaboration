@@ -69,6 +69,7 @@ tm :: Int -> [Name] -> Tm -> ShowS
 tm p ns = \case
   Var x  -> case ns !! x of
     '*':n -> (n++)
+    "_"   -> ("@"++).(show x++)
     n     -> (n++)
   Meta m ->
     ("?"++).(show m++)
@@ -84,7 +85,7 @@ tm p ns = \case
     par tmp p $ ("λ "++) . lamBind x i . lams (x:ns) t
 
   Pi "_" Expl a b ->
-    par tmp p $ tm recp ns a . (" → "++) . tm tmp ns b
+    par tmp p $ tm recp ns a . (" → "++) . tm tmp ("_":ns) b
   Pi (fresh ns -> x) i a b ->
     par tmp p $ piBind ns x i a . pi (x:ns) b
 
@@ -106,7 +107,7 @@ tm p ns = \case
   Proj2 t   -> par appp p (("π₂ "++). tm atomp ns t)
 
   PiTel "_" a b ->
-    par tmp p $ tm recp ns a . (" → "++) . tm tmp ns b
+    par tmp p $ tm recp ns a . (" → "++) . tm tmp ("_":ns) b
   PiTel (fresh ns -> x) a b ->
     par tmp p $ piBind ns x Impl a . pi (x:ns) b
   LamTel (fresh ns -> x) a t ->
