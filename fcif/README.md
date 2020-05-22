@@ -24,9 +24,9 @@ The executable `fcif` reads an expression from standard input.
 - `fcif nf` prints the normal form of the input.
 - `fcif type` prints the type of the input.
 
-See [benchmarks.fcif](benchmarks.fcif) here for an example file.
+See [benchmarks.fcif](benchmarks.fcif) here for an example.
 
-#### Differences to the paper
+#### Comparison to the paper
 
 Extra features:
 - Optional type annotations on lambdas, e.g. `λ (A : U). A`.
@@ -37,9 +37,22 @@ Extra features:
   top-lambda-bound variables in meta spines in elaboration output and error
   messages, as they are irrelevant to meta solutions and would only add clutter.
 
-Implementation:
+Differences:
 - The metacontext is unordered in the implementation, unlike in the
   specification, where it is ordered. In principle, the metacontext as
   implemented can be ordered because the strengthening/occurs checking ensures
   that no cyclic dependencies are present in meta solutions and types.  This is
   a standard implementation strategy, also used in e.g. in Agda.
+
+Notation:
+- Metavariables are printed as `?n`, where `n` is an integer, meaning
+  the `n`-th fresh metavariable.
+- Inserted binders which arise from curried function insertion are named `Γn`,
+  where `n` is an integer. `n` isn't particularly informative, it comes from a
+  combination of fresh meta ids and telescope refining.
+- Non-unicode in surface syntax: lambdas can be written as
+  `\\` and `λ`, and function arrows as `->` and `→`.
+- We print curried functions in the same way as implicit functions. They can be
+  disambiguated visually by having a telescope domain.
+- Curried lambdas are printed as `λ{x : a}. t` where `a` is a telescope.
+- Curried applications are printed as `t {u : a}`, where `a` is a telescope.
