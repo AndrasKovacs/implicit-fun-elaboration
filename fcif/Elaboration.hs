@@ -43,7 +43,11 @@ liftVal cxt t = \ ~x -> eval (VDef (cxt^.vals) x) $ quote (cxt^.len+1) t
 -- Constancy constraints
 --------------------------------------------------------------------------------
 
-data Occurs = Rigid | Flex IS.IntSet | None deriving (Eq, Show)
+data Occurs
+  = Rigid           -- ^ At least one occurrence is not in the spine of any meta.
+  | Flex IS.IntSet  -- ^ All occurrences are inside spines of metas. We store the set of such metas.
+  | None            -- ^ The variable does not occur.
+  deriving (Eq, Show)
 
 instance Semigroup Occurs where
   Flex ms <> Flex ms' = Flex (ms <> ms')
@@ -59,7 +63,7 @@ occurrence ms | IS.null  ms = Rigid
 instance Monoid Occurs where
   mempty = None
 
--- | Occurs check for the purpose of constraint solving.
+-- | Occurs check for the purpose of constancy constraint solving.
 occurs :: Lvl -> Lvl -> Val -> Occurs
 occurs d topX = occurs' d mempty where
 
@@ -131,7 +135,7 @@ newConstancy cxt dom cod =
 -- | Checks that a spine consists only of distinct bound vars.
 --   Returns a partial variable renaming on success, alongside the size
 --   of the spine, and the list of variables in the spine.
---   May throw SpineError.
+--   May throw `SpineError`.
 checkSp :: Spine -> IO (Renaming, Lvl, [Lvl])
 checkSp = (over _3 reverse <$>) . go . forceSp where
   go :: Spine -> IO (Renaming, Lvl, [Lvl])
@@ -163,7 +167,7 @@ closingTy cxt = go (cxt^.types) (cxt^.names) (cxt^.len) where
 
 -- | Close a term by wrapping it in `Int` number of lambdas, while taking the domain
 --   types from the `VTy`, and the binder names from a list. If we run out of provided
---   binder names, we pick the names from Pi domains.
+--   binder names, we pick the names from the Pi domains.
 closingTm :: (VTy, Int, [Name]) -> Tm -> Tm
 closingTm = go 0 where
   getName []     x = x
@@ -179,7 +183,7 @@ closingTm = go 0 where
 
 -- | Strengthens a value, returns a quoted normal result. This performs scope
 --   checking, meta occurs checking and (recursive) pruning at the same time.
---   May throw StrengtheningError.
+--   May throw `StrengtheningError`.
 strengthen :: Str -> Val -> IO Tm
 strengthen str = go where
 
@@ -271,7 +275,7 @@ strengthen str = go where
     SProj1 sp      -> Proj1 <$> goSp h sp
     SProj2 sp      -> Proj2 <$> goSp h sp
 
--- | May throw UnifyError.
+-- | May throw `UnifyError`.
 solveMeta :: Cxt -> MId -> Spine -> Val -> IO ()
 solveMeta cxt m sp rhs = do
 
@@ -279,9 +283,11 @@ solveMeta cxt m sp rhs = do
   let ~topLhs = quote (cxt^.len) (VNe (HMeta m) sp)
       ~topRhs = quote (cxt^.len) rhs
 
+  -- check spine
   (ren, spLen, spVars) <- checkSp sp
          `catch` (throwIO . SpineError (cxt^.names) topLhs topRhs)
 
+  --  strengthen right hand side
   rhs <- strengthen (Str spLen (cxt^.len) ren (Just m)) rhs
          `catch` (throwIO . StrengtheningError (cxt^.names) topLhs topRhs)
 
@@ -310,20 +316,22 @@ freshMeta cxt (quote (cxt^.len) -> a) = do
   let sp = fst $ vars (cxt^.types)
   pure (quote (cxt^.len) (VNe (HMeta m) sp))
 
--- | Wrap the inner UnifyError arising from unification in an UnifyErrorWhile.
+-- | Wrap the inner `UnifyError` arising from unification in an `UnifyErrorWhile`.
+--   This is just the decoration of an error with one additional piece of context.
 unifyWhile :: Cxt -> Val -> Val -> IO ()
 unifyWhile cxt l r =
   unify cxt l r
   `catch`
   (report (cxt^.names) . UnifyErrorWhile (quote (cxt^.len) l) (quote (cxt^.len) r))
 
--- | May throw UnifyError.
+-- | May throw `UnifyError`.
 unify :: Cxt -> Val -> Val -> IO ()
 unify cxt l r = go l r where
 
   unifyError =
     throwIO $ UnifyError (cxt^.names) (quote (cxt^.len) l) (quote (cxt^.len) r)
 
+  -- if both sides are meta-headed, we simply try to check both spines
   flexFlex m sp m' sp' = do
     try @SpineError (checkSp sp) >>= \case
       Left{}  -> solveMeta cxt m' sp' (VNe (HMeta m) sp)
@@ -375,7 +383,6 @@ unify cxt l r = go l r where
   goBind x a t t' =
     let v = VVar (cxt^.len) in unify (bindSrc x a cxt) (t v) (t' v)
 
-  -- TODO: forcing spine while unifying
   goSp sp sp' = case (sp, sp') of
     (SNil, SNil)                            -> pure ()
     (SApp sp u i, SApp sp' u' i') | i == i' -> goSp sp sp' >> go u u'
@@ -447,7 +454,8 @@ check cxt topT ~topA = case (topT, force topA) of
     pure t
 
 -- | We specialcase top-level lambdas (serving as postulates) for better
---   printing: we don't print them in meta spines.
+--   printing: we don't print them in meta spines. We prefix the top
+--   lambda-bound names with '*'. This is a bit hacky.
 inferTopLams :: Cxt -> Raw -> IO (Tm, VTy)
 inferTopLams cxt = \case
   RLam x ann i t -> do
@@ -520,7 +528,6 @@ infer cxt = \case
       Nothing  -> freshMeta cxt VU
     let ~va = eval (cxt^.vals) a
     let cxt' = bind x NOSource va cxt
-    -- (t, liftVal cxt -> b) <- infer cxt' t
     let ins = case t of RLam _ _ Impl _ -> id
                         _               -> insert cxt'
     (t, liftVal cxt -> b) <- ins $ infer cxt' t

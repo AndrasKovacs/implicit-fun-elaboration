@@ -7,28 +7,21 @@ description: "Implementation of \"Elaboration with First-Class Implicit Function
 
 default-extensions:
 - BangPatterns
-- ConstraintKinds
 - DeriveAnyClass
-- EmptyCase
 - ExplicitNamespaces
 - FlexibleContexts
 - FlexibleInstances
 - FunctionalDependencies
 - LambdaCase
 - MultiParamTypeClasses
-- NoMonomorphismRestriction
-- OverloadedStrings
-- PartialTypeSignatures
 - PatternSynonyms
 - RankNTypes
-- RecordWildCards
 - ScopedTypeVariables
 - StandaloneDeriving
 - Strict
 - TemplateHaskell
 - TupleSections
 - TypeApplications
-- TypeInType
 - ViewPatterns
 
 ghc-options:

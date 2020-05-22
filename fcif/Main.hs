@@ -14,7 +14,7 @@ import Parser
 import ElabState
 import Zonk
 
-
+helpMsg :: String
 helpMsg = unlines [
   "usage: fcif [--help|elab|nf|type]",
   "  --help : display this message",

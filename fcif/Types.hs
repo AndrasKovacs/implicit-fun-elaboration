@@ -13,7 +13,8 @@ import qualified Data.IntSet        as IS
 -- Raw syntax
 --------------------------------------------------------------------------------
 
--- | We wrap `SourcePos` to avoid printing it in `Show`.
+-- | We wrap `SourcePos` to avoid printing it in `Show`, as that would be
+--   unreadable because of clutter.
 newtype SPos = SPos SourcePos deriving (Eq, Ord, Read)
 instance Show SPos where show _ = ""
 
@@ -31,7 +32,7 @@ icit Expl i e = e
 -- | Surface syntax.
 data Raw
   = RVar Name                        -- ^ x
-  | RLam Name (Maybe Raw) Icit Raw   -- ^ λx.t  or λ{x}.t with optional type annotation
+  | RLam Name (Maybe Raw) Icit Raw   -- ^ λ x. t  or λ{x}. t with optional type annotation
                                      --   on x
   | RApp Raw Raw Icit                -- ^ t u  or  t {u}
   | RU                               -- ^ U
@@ -63,7 +64,7 @@ data MetaEntry
 
 
 -- | A partial mapping from levels to levels. Undefined domain represents
---   out-of-scope or "illegal" variables.
+--   out-of-scope variables.
 type Renaming = IM.IntMap Lvl
 
 -- | Explicit strengthening. We use this for pruning and checking meta solution
@@ -75,7 +76,7 @@ data Str = Str {
   _strOcc :: Maybe MId   -- ^ meta for occurs checking
   }
 
--- | Lift over a bound variable.
+-- | Lift a `Str` over a bound variable.
 liftStr :: Str -> Str
 liftStr (Str c d r occ) = Str (c + 1) (d + 1) (IM.insert d c r) occ
 
@@ -146,7 +147,7 @@ data Tm
   | U                 -- ^ U
   | Meta MId          -- ^ α
 
-  | Skip Tm           -- ^ explicit weakening (convenience feature in closing types)
+  | Skip Tm           -- ^ explicit weakening (convenience feature for closing types)
 
 data Spine
   = SNil

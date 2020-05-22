@@ -1,11 +1,8 @@
 
-module Parser (
-    parseString
-  , parseStdin
-  ) where
+module Parser (parseString , parseStdin) where
 
-import Control.Monad
 import Data.Char
+import Data.Foldable
 import Data.Void
 import System.Exit
 import Text.Megaparsec
@@ -38,16 +35,20 @@ keyword x =
   x == "let" || x == "in" || x == "λ" || x == "U"
 
 pIdent :: Parser Name
-pIdent = try $ do
-  x <- takeWhile1P Nothing isAlphaNum
-  guard (not (keyword x))
-  x <$ ws
+pIdent = do
+  o <- getOffset
+  x <- try (takeWhile1P Nothing isAlphaNum <* ws)
+  if keyword x then do
+    setOffset o
+    fail "unexpected keyword, expected an identifier"
+  else
+    pure x
 
 pAtom :: Parser Raw
 pAtom  =
-      withPos (    (RVar <$> pIdent)
-               <|> (RU <$ char 'U')
-               <|> (RHole <$ char '_'))
+      withPos (    (RVar  <$> pIdent)
+               <|> (RU    <$  char 'U')
+               <|> (RHole <$  char '_'))
   <|> parens pTm
 
 pArg :: Parser (Icit, Raw)
@@ -57,9 +58,9 @@ pArg =
 
 pSpine :: Parser Raw
 pSpine = do
-  h <- pAtom
+  h    <- pAtom
   args <- many pArg
-  pure $ foldl (\t (i, u) -> RApp t u i) h args
+  pure $ foldl' (\t (i, u) -> RApp t u i) h args
 
 pLamBinder :: Parser (Name, Maybe Raw, Icit)
 pLamBinder =
@@ -81,19 +82,16 @@ pPiBinder =
                        <*> ((char ':' *> pTm) <|> pure RHole))
   <|> parens ((,,Expl) <$> some pBind
                        <*> (char ':' *> pTm))
-pPi :: Parser Raw
-pPi = do
-  dom <- some pPiBinder
-  pArrow
-  cod <- pTm
-  pure $ foldr (\(xs, a, i) t -> foldr (\x -> RPi x i a) t xs) cod dom
 
-pFunOrSpine :: Parser Raw
-pFunOrSpine = do
-  sp <- pSpine
-  optional pArrow >>= \case
-    Nothing -> pure sp
-    Just _  -> RPi "_" Expl sp <$> pTm
+pFunExp :: Parser Raw
+pFunExp = do
+  eitherP (try (some pPiBinder)) pSpine >>= \case
+    Left dom -> do
+      pArrow
+      cod <- pTm
+      pure $ foldr (\(xs, a, i) t -> foldr (\x -> RPi x i a) t xs) cod dom
+    Right sp ->
+      (pArrow *> (RPi "_" Expl sp <$> pTm)) <|> pure sp
 
 pLet :: Parser Raw
 pLet = do
@@ -107,7 +105,7 @@ pLet = do
   pure $ RLet x (maybe RHole id ann) t u
 
 pTm :: Parser Raw
-pTm = withPos (pLam <|> pLet <|> try pPi <|> pFunOrSpine)
+pTm = withPos (pLam <|> pLet <|> pFunExp)
 
 pSrc :: Parser Raw
 pSrc = ws *> pTm <* eof

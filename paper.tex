@@ -1180,15 +1180,17 @@ considered.
     definitionally equal to a canonical term. For example, every closed natural
     number is a numeral, every $\mathsf{Bool}$ is $\true$ or $\false$ and so
     on. A canonical theory is useful as a \emph{total programming language}; if
-    canonicity fails, then some programs compute to stuck terms which cannot be
-    viewed as values. In non-total languages, progress and type preservation
-    constitute a weaker analogue of canonicity.
+    canonicity fails, then some closed programs diverge or compute to stuck
+    terms which cannot be viewed as values. In non-total languages, progress and
+    type preservation constitute a weaker analogue of canonicity
+    \cite[Chapter~6]{harper2016practical}.
   \item A theory has \emph{decidable conversion}, if definitional equality is
     decidable. Undecidable conversion usually implies undecidable type checking
     for type theories. Often, decidable conversion follows from a normalization
     procedure for open terms: we first normalize, then decide equality of normal
     forms.
 \end{itemize}
+
 
 The properties are listed roughly in the order of increasing
 strength. Canonicity often implies consistency (because empty types have no

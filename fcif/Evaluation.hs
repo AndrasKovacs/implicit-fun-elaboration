@@ -29,8 +29,8 @@ vMeta m = case runLookupMeta m of
   Solved v   -> v
   _          -> error "impossible"
 
--- | Force the outermost constructor in a value, do not force the spine
---   of a neutral value.
+-- | Evaluates meta solutions until we hit the first rigid constructor or
+--   unsolved head variable. Does not force the spine of a neutral value.
 force :: Val -> Val
 force = \case
   v@(VNe (HMeta m) sp) -> case runLookupMeta m of
@@ -117,7 +117,7 @@ eval vs = go where
 
   goBind t x = eval (VDef vs x) t
 
-
+-- | Quote a beta-normal form from a `Val`.
 quote :: Lvl -> Val -> Tm
 quote d = go where
 

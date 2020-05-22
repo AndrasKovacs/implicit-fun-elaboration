@@ -2,127 +2,135 @@
 
 module Pretty (showTm, showTopTm) where
 
+import Prelude hiding (pi)
 import Types
 
--- | We specialcase printing of top lambdas, since they are usually used
---   to postulate stuff. We use '*' in a somewhat hacky way to mark
---   names bound in top lambdas, so that later we can avoid printing
---   them in meta spines.
-topLams :: Bool -> String -> String -> [Name] -> Tm -> ShowS
-topLams p pre post ns (Lam (fresh ns -> x) i a t) =
-  showParen p (
-    (pre++)
-  . icit i bracket parens (
-         ((if null x then "_" else x)++) . (" : "++) . go False ns a)
-  . topLams False "\n " ".\n\n" (('*':x):ns) t) -- note the '*'
-topLams _ pre post ns t = (post++) . go False ns t
+-- | Wrap in parens if expression precedence is lower than
+--   enclosing expression precedence.
+par :: Int -> Int -> ShowS -> ShowS
+par p p' = showParen (p < p')
+
+-- Precedences
+atomp = 3  -- identifiers, U, ε, Tel
+appp  = 2  -- application (functions, π₁, π₂, Rec): assocs to left
+recp  = 1  -- _∷_ : assocs to right
+tmp   = 0  -- lam, let, Pi, PiTel, _▷_ : assocs to right
 
 fresh :: [Name] -> Name -> Name
 fresh _ "_" = "_"
 fresh ns n | elem n ns = fresh ns (n++"'")
            | otherwise = n
 
-goVar :: [Name] -> Ix -> ShowS
-goVar ns x = case ns !! x of
-  '*':n -> (n++)
-  n     -> (n++)
-
-goArg :: [Name] -> Tm -> Icit -> ShowS
-goArg ns t i = icit i (bracket (go False ns t)) (go True ns t)
-
-goLamBind :: Name -> Icit -> ShowS
-goLamBind x i = icit i bracket id ((if null x then "_" else x) ++)
-
+bracket :: ShowS -> ShowS
 bracket s = ('{':).s.('}':)
-parens  s = ('(':).s.(')':)
 
-goLam :: [Name] -> Tm -> ShowS
-goLam ns (Lam (fresh ns -> x) i a t)  = (' ':) . goLamBind x i . goLam (x:ns) t
-goLam ns (LamTel(fresh ns -> x) a t) =
-  (' ':) . bracket ((x++) . (" : "++) . go False ns a) . goLam (x:ns) t
-goLam ns t = (". "++) . go False ns t
+-- | Prints a spine, also returns whether the spine is meta-headed.
+spine :: [Name] -> Tm -> (ShowS, Bool)
+spine ns (App (spine ns -> (tp, metasp)) u i) =
+  -- we don't print top-level lambda-bound args in meta spines
+  let up | True <- metasp, Var x <- u, '*':_ <- ns !! x =
+             id
+         | otherwise =
+             (' ':) . icit i (bracket (tm tmp ns u)) (tm atomp ns u)
+  in (tp . up, metasp)
+spine ns (AppTel a (spine ns -> (tp, metasp)) u) =
+  (tp . (' ':) . bracket (tm tmp ns u . (" : "++) . tm tmp ns a), metasp)
+spine ns (Meta m) =
+  (tm atomp ns (Meta m), True)
+spine ns t =
+  (tm atomp ns t, False)
 
-goPiBind :: [Name] -> Name -> Icit -> Tm -> ShowS
-goPiBind ns x i a =
-  icit i bracket (showParen True) ((x++) . (" : "++) . go False ns a)
+lamBind :: Name -> Icit -> ShowS
+lamBind x i = icit i bracket id ((if null x then "_" else x) ++)
 
-goPi :: [Name] -> Bool -> Tm -> ShowS
-goPi ns p (Pi (fresh ns -> x) i a b)
-  | x /= "_" = goPiBind ns x i a . goPi (x:ns) True b
-  | otherwise =
-     (if p then (" → "++) else id) .
-     go (case a of App{} -> False; AppTel{} -> False; _ -> True) ns a .
-     (" → "++) . go False (x:ns) b
+lamTelBind :: [Name] -> Name -> Tm -> ShowS
+lamTelBind ns x a = bracket ((x++).(" : "++).tm tmp ns a)
 
-goPi ns p (PiTel (fresh ns -> x) a b)
-  | x /= "_" = goPiBind ns x Impl a . goPi (x:ns) True b
-  | otherwise =
-     (if p then (" → "++) else id) .
-     go (case a of App{} -> False; AppTel{} -> False; _ -> True) ns a .
-     (" → "++) . go False (x:ns) b
+lams :: [Name] -> Tm -> ShowS
+lams ns (Lam (fresh ns -> x) i a t) =
+  (' ':) . lamBind x i . lams (x:ns) t
+lams ns (LamTel (fresh ns -> x) a t) =
+  (' ':) . lamTelBind ns x a . lams (x:ns) t
+lams ns t =
+  (". "++) . tm tmp ns t
 
-goPi ns p t = (if p then (" → "++) else id) . go False ns t
+piBind :: [Name] -> Name -> Icit -> Tm -> ShowS
+piBind ns x i a =
+  icit i bracket (showParen True) ((x++) . (" : "++) . tm tmp ns a)
 
-isMetaSp :: Tm -> Bool
-isMetaSp Meta{}         = True
-isMetaSp (App t _ _)    = isMetaSp t
-isMetaSp (AppTel _ t _) = isMetaSp t
-isMetaSp _              = False
+pi :: [Name] -> Tm -> ShowS
+pi ns (Pi (fresh ns -> x) i a b)  | x /= "_" =
+  piBind ns x i a . pi (x:ns) b
+pi ns (PiTel (fresh ns -> x) a b) | x /= "_" =
+  piBind ns x Impl a . pi (x:ns) b
+pi ns t = (" → "++) . tm tmp ns t
 
-goMetaSp :: [Name] -> Tm -> ShowS
-goMetaSp ns (App t (Var x) i) | '*':_ <- ns !! x =
-  goMetaSp ns t
-goMetaSp ns (App t u i)    =
-  goMetaSp ns t . (' ':) . goArg ns u i
-goMetaSp ns (AppTel a t u) =
-  goMetaSp ns t . (' ':) . bracket (go False ns u . (" : "++) . go False ns a)
-goMetaSp ns (Meta m) = ("?"++).(show m++)
-goMetaSp _ _ = error "impossible"
-
-goSp :: [Name] -> Tm -> ShowS
-goSp ns (App t u i) = goSp ns t . (' ':) . goArg ns u i
-goSp ns (AppTel a t u) =
-  goSp ns t . (' ':) . bracket (go False ns u . (" : "++) . go False ns a)
-goSp ns t = go True ns t
-
-go :: Bool -> [Name] -> Tm -> ShowS
-go p ns = \case
-  Var x -> goVar ns x
-  Meta m -> ("?"++).(show m++)
+tm :: Int -> [Name] -> Tm -> ShowS
+tm p ns = \case
+  Var x  -> case ns !! x of
+    '*':n -> (n++)
+    n     -> (n++)
+  Meta m ->
+    ("?"++).(show m++)
   Let (fresh ns -> x) a t u ->
-    ("let "++) . (x++) . (" : "++) . go False ns a . ("\n    = "++)
-    . go False ns t  . ("\nin\n"++) . go False (x:ns) u
-  t@App{} | isMetaSp t -> showParen p (goMetaSp ns t)
-          | otherwise  -> showParen p (goSp     ns t)
-  t@AppTel{}| isMetaSp t -> showParen p (goMetaSp ns t)
-            | otherwise  -> showParen p (goSp     ns t)
+    par tmp p $
+      ("let "++).(x++).(" : "++). tm tmp ns a . ("\n    = "++)
+      . tm tmp ns t . ("\nin\n"++) . tm tmp (x:ns) u
+  t@App{} ->
+    par appp p $ fst $ spine ns t
+  t@AppTel{} ->
+    par appp p $ fst $ spine ns t
+  Lam x i a t ->
+    par tmp p $ ("λ "++) . lamBind x i . lams (x:ns) t
 
-  Lam (fresh ns -> x) i a t  -> showParen p (("λ "++) . goLamBind x i . goLam (x:ns) t)
-  t@Pi{}         -> showParen p (goPi ns False t)
-  U              -> ("U"++)
-  Tel            -> ("Tel"++)
-  TEmpty         -> ("ε"++)
-  TCons "_" a as -> showParen p (go False ns a . (" ▷ "++). go False ns as)
+  Pi "_" Expl a b ->
+    par tmp p $ tm recp ns a . (" → "++) . tm tmp ns b
+  Pi (fresh ns -> x) i a b ->
+    par tmp p $ piBind ns x i a . pi (x:ns) b
+
+  U      -> ("U"++)
+  Tel    -> ("Tel"++)
+  TEmpty -> ("ε"++)
+
+  TCons "_" a as ->
+    par tmp p $ tm recp ns a . (" ▷ "++). tm tmp ns as
   TCons (fresh ns -> x) a as ->
-            showParen p (showParen True ((x++) . (" : "++) . go False ns a)
-          . (" ▷ "++). go False (x:ns) as)
-  Tempty         -> ("[]"++)
-  Rec a          -> showParen p (("Rec "++) . go True ns a)
-  Tcons t u      -> showParen p (go True ns t . (" ∷ "++). go False ns u)
-  Proj1 t        -> showParen p (("π₁ "++). go True ns t)
-  Proj2 t        -> showParen p (("π₂ "++). go True ns t)
-  t@PiTel{}      -> showParen p (goPi ns False t)
+    par tmp p $
+      showParen True ((x++) . (" : "++) . tm tmp ns a)
+      . (" ▷ "++). tm tmp (x:ns) as
 
-  LamTel x a t -> showParen p (("λ"++)
-                 . bracket ((x++) . (" : "++) . go False ns a) . goLam (x:ns) t)
+  Tempty    -> ("[]"++)
+  Rec a     -> par appp p $ ("Rec "++) . tm atomp ns a
+  Tcons t u -> par recp p (tm appp ns t . (" ∷ "++). tm recp ns u)
+  Proj1 t   -> par appp p (("π₁ "++). tm atomp ns t)
+  Proj2 t   -> par appp p (("π₂ "++). tm atomp ns t)
 
-  Skip t -> go p ("_":ns) t
+  PiTel "_" a b ->
+    par tmp p $ tm recp ns a . (" → "++) . tm tmp ns b
+  PiTel (fresh ns -> x) a b ->
+    par tmp p $ piBind ns x Impl a . pi (x:ns) b
+  LamTel (fresh ns -> x) a t ->
+    par tmp p $ ("λ"++) . lamTelBind ns x a . lams (x:ns) t
+
+  Skip t -> tm p ("_":ns) t
+
+-- | We specialcase printing of top lambdas, since they are usually used
+--   to postulate stuff. We use '*' in a somewhat hacky way to mark
+--   names bound in top lambdas, so that later we can avoid printing
+--   them in meta spines.
+showTopTm :: Tm -> String
+showTopTm t = topLams False "λ" "" [] t [] where
+  topLams :: Bool -> String -> String -> [Name] -> Tm -> ShowS
+  topLams p pre post ns (Lam (fresh ns -> x) i a t) =
+    showParen p (
+      (pre++)
+    . icit i bracket (showParen True) (
+           ((if null x then "_" else x)++) . (" : "++) . tm tmp ns a)
+    . topLams False "\n " ".\n\n" (('*':x):ns) t) -- note the '*'
+  topLams _ pre post ns t = (post++) . tm tmp ns t
 
 showTm :: [Name] -> Tm -> String
-showTm ns t = go False ns t []
+showTm ns t = tm tmp ns t []
 -- showTm ns t = show t
 -- deriving instance Show Tm
 instance Show Tm where show = showTopTm
-
-showTopTm :: Tm -> String
-showTopTm t = topLams False "λ" "" [] t []
