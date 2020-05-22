@@ -1,7 +1,7 @@
 ## fcif
 
 Implementation of the elaborator in the draft paper "Elaboration with
-First-Class Implicit Function Types".
+First-Class Implicit Function Types" by András Kovács.
 
 We also have here a small supplementary Agda file,
 [TelescopeDerivation.agda](TelescopeDerivation.agda), which contains a derivation
@@ -9,7 +9,7 @@ of telescopes and curried functions from Section 4 of the paper.
 
 #### Installation
 
-- Install Haskell Stack: https://docs.haskellstack.org/en/stable/README/ if you don't already have it
+- Install Haskell Stack: https://docs.haskellstack.org/en/stable/README/. I have built this package using stack 2.3.1.
 - `stack install` from this directory
 - This copies the executable `fcif` to `~/.local/bin`.
 - Agda installation for checking the Agda file: see [Agda
@@ -50,7 +50,7 @@ Notation:
 - Sometimes no name is available for a variable from the surface syntax. In this
   case, the variable is printed as `@n` where `n` is a de Bruijn index. For example,
   in `let foo : U = U → _`, because the non-dependent function is just a shorthand for
-  a pi type, the codomain metavariable depends on the unnamed `U` domain, which is printed 
+  a pi type, the codomain metavariable depends on the unnamed `U` domain, which is printed
   as a de Bruijn index. It would be an optimization
   to treat non-dependent functions specially in elaboration, so that no such dependencies are introduced.
 - Inserted binders which arise from curried function insertion are named `Γn`,
