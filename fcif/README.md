@@ -42,7 +42,7 @@ Differences:
   specification, where it is ordered. In principle, the metacontext as
   implemented can be ordered because the strengthening/occurs checking ensures
   that no cyclic dependencies are present in meta solutions and types.  This is
-  a standard implementation strategy, also used in e.g. in Agda.
+  a standard implementation strategy, also used e.g. in Agda.
 
 Notation:
 - Metavariables are printed as `?n`, where `n` is an integer, meaning
@@ -51,7 +51,7 @@ Notation:
   where `n` is an integer. `n` isn't particularly informative, it comes from a
   combination of fresh meta ids and telescope refining.
 - Non-unicode in surface syntax: lambdas can be written as
-  `\\` and `λ`, and function arrows as `->` and `→`.
+  `\` and `λ`, and function arrows as `->` and `→`.
 - We print curried functions in the same way as implicit functions. They can be
   disambiguated visually by having a telescope domain.
 - Curried lambdas are printed as `λ{x : a}. t` where `a` is a telescope.
