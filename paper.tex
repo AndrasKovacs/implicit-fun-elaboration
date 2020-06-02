@@ -1,5 +1,5 @@
 
-%% build: latexmk -pdf -pvc -xelatex paper.tex
+%% build: latexmk -pdf -pvc paper.tex
 
 %% For double-blind review submission, w/o CCS and ACM Reference (max submission space)
 \documentclass[acmsmall,review,anonymous,prologue,dvipsnames]{acmart}\settopmatter{printfolios=true,printccs=false,printacmref=false}
@@ -117,6 +117,7 @@
 \newcommand{\yes}{\text{Yes}}
 \newcommand{\yesst}{\text{Yes*}}
 \newcommand{\no}{\text{No}}
+\newcommand{\implArity}{\mathsf{implArity}}
 
 \theoremstyle{remark}
 \newtheorem{notation}{Notation}
@@ -352,10 +353,11 @@ simplifications; what we end up with can be viewed as a toy version of the
 actual Agda elaborator. Our main goal with the elaborator is to have a setup
 which is as simple as possible, but sufficient to illustrate the enhancements in
 Section \ref{sec:extending_elaboration}, and make it clear that this could be
-used to conservatively extend existing dependently typed languages. Hence, we do
-not have more fine-grained control over metavariable insertion, nor the advanced
-unification algorithms used in Agda \cite{abel2011higher}; all of these are
-orthogonal improvements to the presented system.
+used to conservatively extend elaboration in existing dependently typed
+languages. Hence, we do not have more fine-grained control over metavariable
+insertion, nor the advanced unification algorithms used in Agda
+\cite{abel2011higher}; all of these are orthogonal improvements to the presented
+system.
 
 \begin{figure}[h]
 \begin{alignat*}{4}
@@ -757,18 +759,25 @@ the used notations:
 \end{itemize}
 We present the specifications and definitions below, then we describe them in order.
 \begin{mathpar}
-\inferrule*[lab=insert]{\Theta_0|\Gamma\vdash \\ (\Theta,\,\theta,\,t,\,A) \in
+\inferrule*[lab=insertion,flushleft]{\Theta_0|\Gamma\vdash \\ (\Theta,\,\theta,\,t,\,A) \in
              \{(\Theta,\,\theta,\,t,\,A)\,|\,(\theta : \Theta \To \Theta_0)\,\land\,
                (\Theta|\Gamma[\theta]\vdash t : A)\}\cup\{\fail\}}
-           {\einsert(\Theta,\,\theta,\,t,\,A) \in \{(\Theta,\,\theta,\,t,\,A)\,|\,
-             (\theta : \Theta \To \Theta_0)\,\land\,(\Theta|\Gamma[\theta]\vdash t : A)\}\cup\{\fail\}}
+           {\einsert'(\Theta,\,\theta,\,t,\,A) \in \{(\Theta,\,\theta,\,t,\,A)\,|\,
+             (\theta : \Theta \To \Theta_0)\,\land\,(\Theta|\Gamma[\theta]\vdash t : A)\}\cup\{\fail\}
+           \\
+            \einsert(\Theta,\,\theta,\,t,\,A)\hspace{0.3em}\in \{(\Theta,\,\theta,\,t,\,A)\,|\,
+             (\theta : \Theta \To \Theta_0)\,\land\,(\Theta|\Gamma[\theta]\vdash t : A)\}\cup\{\fail\}
+           }
 \end{mathpar}
 \begin{alignat*}{3}
-  &\einsert\,(\Theta_1,\,\theta_1,\,t,\,\{x : A\}\to B) && :\equiv\hspace{0.5em}&&
+  &\einsert'\,(\Theta_1,\,\theta_1,\,t,\,\{x : A\}\to B) && :\equiv\hspace{0.5em}&&
        \slet\,(\Theta_2,\,\theta_2,\,u) = \freshMeta{\Theta_1}{\Gamma[\theta_1]}{A}\\
-  & && &&\sin\,\einsert\,(\Theta_2,\,\theta_{12},\,(t[\theta_2])\,\{u\},\,B[\theta_2][x\mapsto u])\\
-  &\einsert\,(\Theta_1,\,\theta_1,\,t,\,A) && :\equiv&& \ereturn\,(\Theta_1,\,\theta_1,\,t,\,A)\\
-  &\einsert\,\fail && :\equiv && \fail
+  & && &&\sin\,\einsert'\,(\Theta_2,\,\theta_{12},\,(t[\theta_2])\,\{u\},\,B[\theta_2][x\mapsto u])\\
+  &\einsert'\,(\Theta_1,\,\theta_1,\,t,\,A) && :\equiv&& \ereturn\,(\Theta_1,\,\theta_1,\,t,\,A)\\
+  &\einsert'\,\fail && :\equiv && \fail\\
+  &\einsert\,(\Theta,\,\theta,\,(\lambda\{x\}.t),\,A) && :\equiv&& \ereturn\,(\Theta,\,\theta,\,(\lambda\{x\}.t),\,A)\\
+  &\einsert\,(\Theta,\,\theta,\,t,\,A) && :\equiv&& \einsert'\,(\Theta,\,\theta,\,t,\,A)\\
+  &\einsert\,\fail && :\equiv && \fail\\
 \end{alignat*}
 \begingroup
 \allowdisplaybreaks
@@ -811,7 +820,7 @@ We present the specifications and definitions below, then we describe them in or
   &\quad(\Theta_2,\,\theta_2) \leftarrow \unify\,(A[\theta_1])\,B\\
   &\quad\ereturn\,(\Theta_2,\,\theta_{12},\,t'[\theta_2])\\\\
   &\einfer{x}{\Theta}{\Gamma} :\equiv \edo\\
-  &\quad\eif\,(\Gamma = (\Gamma_0,\,x : A,\,\Gamma_1))\,\lor\,(\Gamma = (\Gamma_0,\,x : A = t,\,\Gamma_1)) \\
+  &\quad\eif\,(\Gamma \equiv (\Gamma_0,\,x : A,\,\Gamma_1))\,\lor\,(\Gamma \equiv (\Gamma_0,\,x : A = t,\,\Gamma_1)) \\
   &\qquad   \ethen\, \ereturn\,(\Theta,\,\id,\,x,\,A)\\
   &\qquad   \eelse\, \fail\\
   &\einfer{\U}{\Theta}{\Gamma} :\equiv \edo\\
@@ -829,7 +838,7 @@ We present the specifications and definitions below, then we describe them in or
   &\quad\ereturn\,(\Theta_2,\,\theta_{12},
                  \,(\{x : A'[\theta_2]\}\to B'),\,\U)\\
   &\einfer{t\,u}{\Theta_0}{\Gamma} :\equiv \edo \\
-  &\quad (\Theta_1,\,\theta_1,\,t',\,A) \leftarrow \einsert\,(\einfer{t}{\Theta_0}{\Gamma})\\
+  &\quad (\Theta_1,\,\theta_1,\,t',\,A) \leftarrow \einsert'\,(\einfer{t}{\Theta_0}{\Gamma})\\
   &\quad \slet\,(\Theta_2,\,\theta_2,A_0) = \freshMeta{\Theta_1}{\Gamma[\theta_1]}{\U}\\
   &\quad \slet\,(\Theta_3,\,\theta_3,A_1) = \freshMeta{\Theta_2}{\Gamma[\theta_{12}],\,x:A_0}{\U}\\
   &\quad (\Theta_4,\,\theta_4) \leftarrow \unify\,(A[\theta_{23}])\,((x : A_0[\theta_3])\to A_1)\\
@@ -844,13 +853,11 @@ We present the specifications and definitions below, then we describe them in or
                  &\quad \ereturn\,(\Theta_5,\,\theta_{12345},\,(t'[\theta_{2345}])\,\{u'\},\,A_1[\theta_{45}][x\mapsto u'])\\
   &\einfer{\lambda\,x.\,t}{\Theta_0}{\Gamma} :\equiv \edo \\
   &\quad \slet\, (\Theta_1,\,\theta_1,\,A) = \freshMeta{\Theta_0}{\Gamma}{\U}\\
-  &\quad(\Theta_2,\,\theta_2,\,t',\,B)\leftarrow \eif\,t = \lambda\{y\}.\,u\,\ethen\,\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:A}\\
-  &\quad\quad\hspace{12em} \eelse\,\einsert(\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:A}) \\
+  &\quad(\Theta_2,\,\theta_2,\,t',\,B)\leftarrow \einsert\,(\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:A})\\
   &\quad\ereturn\,(\Theta_2,\,\theta_{12},\,\lambda\,x.\,t',\,(x : A[\theta_2])\to B)\\
   &\einfer{\lambda\,\{x\}.\,t}{\Theta_0}{\Gamma} :\equiv \edo \\
   &\quad \slet\,(\Theta_1,\,\theta_1,\,A) = \freshMeta{\Theta_0}{\Gamma}{\U}\\
-  &\quad(\Theta_2,\,\theta_2,\,t',\,B)\leftarrow \eif\,t = \lambda\{y\}.\,u\,\ethen\,\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:A}\\
-  &\quad\quad\hspace{12em} \eelse\,\einsert(\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:A}) \\
+  &\quad(\Theta_2,\,\theta_2,\,t',\,B)\leftarrow \einsert\,(\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:A}) \\
   &\quad\ereturn\,(\Theta_2,\,\theta_{12},\,\lambda\,\{x\}.\,t',\,\{x : A[\theta_2]\}\to B)\\
   &\einfer{\slet\,x:A=t\,\sin\,u}{\Theta_0}{\Gamma} :\equiv \edo \\
   &\quad(\Theta_1,\,\theta_1,\,A') \leftarrow \echeck{A}{\Theta_0}{\Gamma}{\U}\\
@@ -865,12 +872,21 @@ We present the specifications and definitions below, then we describe them in or
 \end{alignat*}
 \endgroup
 \subsubsection{Implicit argument insertion}
-The function $\einsert$ inserts implicit applications around a core term. For
-example, if we have a defined name $id$ with type $\{A : \U\}\to A \to A$ in a
-surface program, we usually want to expand $id$ to $id\,\{\alpha\}$, where
-$\alpha$ is a fresh metavariable. We define $\einsert$ to take as input the
-output of $\einferblank$, so that it is more convenient to use as an optional
+We define two functions, $\einsert'$ and $\einsert$ which insert implicit
+applications around a core term. For example, if we have a defined name $id$
+with type $\{A : \U\}\to A \to A$ in a surface program, we usually want to
+expand $id$ occurrences to $id\,\{\alpha\}$, where $\alpha$ is a fresh
+metavariable. We define the insertion functions to take as input the output of
+$\einferblank$, so that it is more convenient to use as an optional
 post-processing step after inference.
+
+The difference between $\einsert$ and $\einsert'$ is that the latter avoids
+insertion to implicit $\lambda$-terms. We usually want to avoid that, as it
+creates a new implicit $\beta$-redex where the fresh metavariable is often
+under-constrained. We only create such $\beta$-redex when the surface program
+explicitly asks for it; we shall shortly see this in the discussion of the
+$\einferblank$ case for explicit function application. With this, we largely
+follow the insertion behavior of Agda.
 
 \subsubsection{Checking}
 The first two clauses are checking $\lambda$-s, where the expected type exactly
@@ -921,7 +937,7 @@ The $\einfer{t\,u}{\Theta_0}{\Gamma}$ and $\einfer{t\,\{u\}}{\Theta_0}{\Gamma}$
 cases are again interesting. Here, we first infer a type for $t$, then refine
 the type to a function type, and lastly check the argument with the domain
 type. Note the difference between the explicit and implicit case. In the former
-case we use $\einsert\,(\einfer{t}{\Theta_0}{\Gamma})$, which inserts implicit
+case we use $\einsert'\,(\einfer{t}{\Theta_0}{\Gamma})$, which inserts implicit
 applications. In the latter case we do no insertion. This ensures that implicit
 applications in the surface syntax behave similarly as in Agda. For example,
 given $\mi{id} : \{A : \U\}\to A\to A$ in scope, we elaborate $\mi{id}\,\,\U$ as follows:
@@ -940,29 +956,18 @@ On the other hand, we elaborate $\mi{id}\,\{\U\}$ as follows:
   \item We change direction and infer $\U$ as type for $\U$, and successfully
     unify $\U$ with $\U$.
 \end{enumerate}
+Also note that we use $\einsert'$ here instead of $\einsert$. Thus, we get
+expected (Agda-like) insertions with $\beta$-redexes as well. For example
+$(\lambda\{A\}\,x.\, \mi{id}\,\{A\}\,x)\,\U$ is elaborated to
+$(\lambda\{A\}\,x.\, \mi{id}\,\{A\}\,x)\,\{\U\}\,\U$.
+
 It would be more efficient (and also allow more user-friendly error
 messages) to not immediately refine the inferred type of $t$ to a function type,
 but rather match on the inferred type, and only perform refining when the type
 is meta-headed. We present the unoptimized version here for the sake of brevity.
 
 For $\lambda$-s, we create a fresh meta for the domain type (since our surface
-$\lambda$-s are not annotated), and infer types for the bodies. Note the extra
-branching: we avoid insertion when the body is an implicit function, as in this
-case this would yield a superfluous $\beta$-redex. We mainly do this in order to
-match the insertion behavior of Agda, where the following definition works as
-expected, without any over-eager insertion in the inner implicit $\lambda$.
-\[
-  \slet\,\mi{const} = \lambda\{A : \Set\}\{B : \Set\}(x : A)(y : B) \to x\,\sin\,...
-\]
-We do not have type-annotated $\lambda$-s in our system, but we can still
-observe some examples which type-check with Agda-like insertion, and would fail
-without the extra $\eif$ branch, like the following:
-\begin{alignat*}{3}
-  & \slet\,f : \_ = \lambda\,A\,\{B\}.\,A\,\sin\,\\
-  & \slet\,g : \U \to \{B : \U\}\to U = f\,\sin\,...
-\end{alignat*}
-Note though that this is mostly a convenience feature in our prototype implementation,
-which does support type-annotated $\lambda$-s.
+$\lambda$-s are not annotated), and infer types for the bodies.
 
 In the case of $\slet$, inference again just falls through, and we infer a type
 for the $\slet$ body. For $\einfer{\_}{\Theta}{\Gamma}$, we create a fresh meta
@@ -986,11 +991,10 @@ $\einferblank$ conform to the \LabTirName{check} and \LabTirName{infer}
 
 We remark that this notion of soundness is only a ``sanity'' or well-typing
 statement for elaboration. In fact, we could define elaboration as a constantly
-failing partial function, and it would also conform to the specification. The
-right way to view this, is that $\echeckblank$ and $\einferblank$ together
-with their specification constitute the semantics of surface syntax. We do not
-give any other semantics to the surface syntax, nor does it support any other
-operation.
+failing partial function, and it would also conform to the specification. One
+way to view this is that $\echeckblank$ and $\einferblank$ together with their
+specification constitute the semantics of surface syntax. We do not give any
+other semantics to the surface syntax, nor does it support any other operation.
 
 We do not present any \emph{completeness} result for elaboration in this
 paper. For an example of what this would entail, in \cite{dunfield2013complete}
@@ -1110,12 +1114,13 @@ $\lambda$. At the heart of the issue is that elaboration makes insertion choices
 based on core types.
 \begin{enumerate}
 \item $\echeck{t}{\Theta}{\Gamma}{A}$ can insert a $\lambda$ only if $A$ is an implicit function type.
-\item $\einsert\,(\Theta,\,\theta,\,t,\,A)$ inserts an application only if $A$ is an implicit function type.
+\item $\einsert\,(\Theta,\,\theta,\,t,\,A)$ can insert an application only if
+  $A$ is an implicit function type.
 \end{enumerate}
 In both of these cases, if $A$ is of the form $\alpha\,\overline{u}$
 (i.e.\ meta-headed), then it is possible that $\alpha$ is later refined to an
-implicit function, but at that point we have already missed our shot at implicit
-insertion.
+implicit function type, but at that point we have already missed our shot at
+implicit insertion.
 
 There is a potential naive solution: just \emph{postpone} checking a term until
 the shape of the checking type is known for sure. This was included as part of a
@@ -1510,14 +1515,23 @@ way we could lose potential non-$\epsilon$ solutions of $A[\theta]$.
 
 \subsection{Unification For Strictly Curried Functions}
 Although we omit most details of unification, we shall discuss it for curried
-functions, as it is essential in the extended elaboration algorithm.  The most
-interesting case is when we unify a curried function type with an implicit
-function type. In this case, we learn that the domain of the curried function is
-non-empty, so we refine the $A$ domain to an extended $(x_0 : A_0) \TCons A_1$
-telescope. Since we invent a fresh $A_1$ domain for a curried function type, we
-need to add a constancy constraint for it as well.
+functions, as it is essential in the extended elaboration algorithm. We seek to
+solve meta-telescopes in a way such that iterated implicit function types on the
+two sides of a unification problem become definitionally equal. First we define
+a helper function which counts leading implicit function types:
 \begin{alignat*}{3}
-& \unify_{\Theta_0|\Gamma}(\{x : \ol{A}\}\to B)\,(\{x_0 : A_0\}\to B') :\equiv \edo\\
+  & \implArity\,(\{x : A\}\to B) && :\equiv 1 + \implArity\,B\\
+  & \implArity\,A                && :\equiv 0
+\end{alignat*}
+Then, we extend unification. The most interesting case is when we unify a
+curried function type with an implicit function type. In this case, if there are
+``missing'' implicit arguments on the side of the curried function type (note
+the $\implArity$ condition on the pattern), we refine the $A$ telescope domain
+to an extended $(x_0 : A_0) \TCons A_1$ telescope. Since we invent a fresh $A_1$
+domain for a curried function type, we need to add a constancy constraint for it
+as well.
+\begin{alignat*}{3}
+& \unify_{\Theta_0|\Gamma}(\{x : \ol{A}\}\to B)\,(\{x_0 : A_0\}\to B')\,\,|\,\,\implArity\,B < \implArity\,B' + 1 :\equiv \edo\\
 & \quad \slet\,(\Theta_1,\,\theta_1,\,A_1) = \freshMeta{\Theta_0}{\Gamma,\,x_0 : A_0}{\Tel}\\
 & \quad (\Theta_2,\,\theta_2) \leftarrow
   \unify_{\Theta_1|\Gamma[\theta_1]}\,(A[\theta_1])\,((x : A_0[\theta_1])\TCons A_1)\\
@@ -1529,18 +1543,30 @@ need to add a constancy constraint for it as well.
 We have the symmetric $\unify_{\Theta_0|\Gamma}(\{x_0 : A_0\}\to B')\,(\{x :
 \ol{A}\}\to B)$ case the same way as above.
 
-Now, let us assume that $B'$ is not an implicit function type, curried function
-type or meta-headed. Then, we have the following case, where we solve a
-telescope domain to be empty.
+Below, let us assume that $B'$ is not meta-headed, and it also does not match
+the pattern above. Hence, either $B'$ is not an implicit function type, or the
+arity condition does not hold, so we learn that the domain telescope should be
+empty.
 \begin{alignat*}{3}
 & \unify_{\Theta_0|\Gamma}(\{x : \ol{A}\}\to B)\,B' :\equiv \edo\\
 & \quad (\Theta_1,\,\theta_1) \leftarrow \unify_{\Theta_0|\Gamma}\,A\,\epsilon\\
 & \quad \unify_{\Theta_1|\Gamma[\theta_1]}\,(B[\theta_1][x\mapsto[]])\,(B'[\theta_1])
 \end{alignat*}
-Again, we also have the symmetric case. For telescopes, $\Rec$, inhabitants of
-$\Rec$, curried abstraction and application, unification is structural, and
-other cases remain the same as in the basic elaborator of Section
-\ref{sec:bidirectional_elaboration}.
+Again, we also have the symmetric case. Some examples for unification behavior:
+\begin{itemize}
+\item If $B$ is not meta-headed, $\unify\,(\{x : \ol{\alpha}\}\to B)\,B$ causes
+  $\alpha$ to be solved as $\epsilon$, for the following reason: if $B$ is an
+  implicit function type, the arity condition fails, otherwise the pattern match
+  fails, so either way we fall through the first rule and solve $\alpha$ to
+  $\epsilon$.
+\item If $B$ is again not meta-headed, $\unify\,(\{x : \ol{\alpha}\}\to B)\,(\{x
+  : A\}\to B)$ causes $\alpha$ to be solved as $A \TCons \epsilon$.
+\end{itemize}
+
+For telescopes, $\Rec$, inhabitants of $\Rec$, curried abstraction and
+application, unification is structural, and other cases remain the same as in
+the basic elaborator of Section \ref{sec:bidirectional_elaboration}.
+
 
 \subsection{Elaboration}
 
@@ -1549,8 +1575,8 @@ $\echeck{t}{\Theta}{\Gamma}{(\{x : A\}\to B)}$:
 \begin{alignat*}{3}
 & \echeck{t}{\Theta_0}{\Gamma}{(\alpha\,\ol{u})} :\equiv \edo\\
 & \quad \slet\,(\Theta_1,\,\theta_1,\,A) = \freshMeta{\Theta_0}{\Gamma}{\Tel}\\
-&\quad(\Theta_2,\,\theta_2,\,t',\,B)\leftarrow \eif\,t = \lambda\{y\}.\,u\,\ethen\,\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:\Rec\,A}\\
-  &\quad\quad\hspace{12em} \eelse\,\einsert(\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:\Rec\,A}) \\
+&\quad(\Theta_2,\,\theta_2,\,t',\,B)\leftarrow
+            \einsert\,(\einfer{t}{\Theta_1}{\Gamma[\theta_1],\,x:\Rec\,A}) \\
 & \quad \slet\,(\Theta_3,\,\theta_3) = \newConstancy{\Theta_2}{\Gamma[\theta_{12}]}{x}{(A[\theta_2])}{B}\\
 & \quad (\Theta_4,\,\theta_4) \leftarrow
             \unify\, ((\alpha\,\ol{u})[\theta_{123}])\,(\{x : \ol{A[\theta_{23}]}\} \to B[\theta_3])\\
@@ -1629,6 +1655,14 @@ further computes to $\alpha_2\,\{A\}$ by \LabTirName{app-$\epsilon$}. From here,
 unification finishes with success. On the last line, the expected output is
 returned: since the $\alpha_1$ telescope meta is now solved, curried function
 types and abstractions are computed away.
+
+Computing
+$\echeckt{\mi{cons}\,(\lambda\,\{A\}\,x.\,x)\,\mi{nil}}{(\mi{List}\,(\{A :
+  \U\}\to A \to A))}$ also succeeds, as in Agda and our basic elaborator. In
+this case elaboration also inserts a curried $\lambda$ around
+$(\lambda\,\{A\}\,x.\,x)$, but its domain is then solved to $\epsilon$ according
+to the rules for curried function type unification.
+
 \end{example}
 
 %% \begin{alignat*}{3}

@@ -337,6 +337,12 @@ unify cxt l r = go l r where
       Left{}  -> solveMeta cxt m' sp' (VNe (HMeta m) sp)
       Right{} -> solveMeta cxt m sp (VNe (HMeta m') sp')
 
+  implArity :: Cxt -> (Val -> Val) -> Int
+  implArity cxt b = go 0 (cxt^.len + 1) (b (VVar (cxt^.len))) where
+    go !acc !len a = case force a of
+      VPi _ Impl _ b -> go (acc + 1) (len + 1) (b (VVar len))
+      _              -> acc
+
   go t t' = case (force t, force t') of
     (VLam x _ a t, VLam _ _ _ t')            -> goBind x a t t'
     (VLam x i a t, t')                       -> goBind x a t (\ ~v -> vApp t' v i)
@@ -358,7 +364,7 @@ unify cxt l r = go l r where
     (VNe (HMeta m) sp, t')                   -> solveMeta cxt m sp t'
     (t, VNe (HMeta m') sp')                  -> solveMeta cxt m' sp' t
 
-    (VPiTel x a b, VPi x' Impl a' b') -> do
+    (VPiTel x a b, VPi x' Impl a' b') | implArity cxt b < implArity cxt b' + 1 -> do
       let cxt' = bindSrc x' a' cxt
       m <- freshMeta cxt' VTel
       let vm = eval (cxt'^.vals) m
@@ -367,7 +373,7 @@ unify cxt l r = go l r where
       newConstancy cxt' vm (b2 (VVar (cxt^.len)))
       goBind x' a' (\ ~x1 -> VPiTel x (liftVal cxt vm x1) (b2 x1)) b'
 
-    (VPi x' Impl a' b', VPiTel x a b) -> do
+    (VPi x' Impl a' b', VPiTel x a b) | implArity cxt b < implArity cxt b' + 1-> do
       let cxt' = bindSrc x' a' cxt
       m <- freshMeta cxt' VTel
       let vm = eval (cxt'^.vals) m
@@ -393,8 +399,8 @@ unify cxt l r = go l r where
 -- Elaboration
 --------------------------------------------------------------------------------
 
-insert :: Cxt -> IO (Tm, VTy) -> IO (Tm, VTy)
-insert cxt act = do
+insert' :: Cxt -> IO (Tm, VTy) -> IO (Tm, VTy)
+insert' cxt act = do
   (t, va) <- act
   let go t va = case force va of
         VPi x Impl a b -> do
@@ -403,6 +409,11 @@ insert cxt act = do
           go (App t m Impl) (b mv)
         va -> pure (t, va)
   go t va
+
+insert :: Cxt -> IO (Tm, VTy) -> IO (Tm, VTy)
+insert cxt act = act >>= \case
+  (t@(Lam _ Impl _ _), va) -> pure (t, va)
+  (t                 , va) -> insert' cxt (pure (t, va))
 
 check :: Cxt -> Raw -> VTy -> IO Tm
 check cxt topT ~topA = case (topT, force topA) of
@@ -430,9 +441,7 @@ check cxt topT ~topA = case (topT, force topA) of
     dom <- freshMeta cxt VTel
     let vdom = eval (cxt^.vals) dom
     let cxt' = bind x NOInserted (VRec vdom) cxt
-    let ins = case t of RLam _ _ Impl _ -> id
-                        _               -> insert cxt'
-    (t, liftVal cxt -> a) <- ins $ infer cxt' t
+    (t, liftVal cxt -> a) <- insert cxt' $ infer cxt' t
     newConstancy cxt vdom a
     unifyWhile cxt topA (VPiTel x vdom a)
     pure $ LamTel x dom t
@@ -491,7 +500,7 @@ infer cxt = \case
     pure (Pi x i a b, VU)
 
   RApp t u i -> do
-    (t, va) <- case i of Expl -> insert cxt $ infer cxt t
+    (t, va) <- case i of Expl -> insert' cxt $ infer cxt t
                          _    -> infer cxt t
     case force va of
       va -> do
@@ -504,7 +513,7 @@ infer cxt = \case
 
   -- -- variant with better error messages and fewer generated metavariables
   -- RApp t u i -> do
-  --   (t, va) <- case i of Expl -> insert cxt $ infer cxt t
+  --   (t, va) <- case i of Expl -> insert' cxt $ infer cxt t
   --                        _    -> infer cxt t
   --   case force va of
   --     VPi x i' a b -> do
@@ -528,9 +537,7 @@ infer cxt = \case
       Nothing  -> freshMeta cxt VU
     let ~va = eval (cxt^.vals) a
     let cxt' = bind x NOSource va cxt
-    let ins = case t of RLam _ _ Impl _ -> id
-                        _               -> insert cxt'
-    (t, liftVal cxt -> b) <- ins $ infer cxt' t
+    (t, liftVal cxt -> b) <- insert cxt' $ infer cxt' t
     pure (Lam x i a t, VPi x i va b)
 
   RHole -> do

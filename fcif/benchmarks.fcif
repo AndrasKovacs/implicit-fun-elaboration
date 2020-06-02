@@ -53,11 +53,8 @@ let auto2  : {B} → IdTy → B → B      = λ _ b. b in
 -- A: polymorphic instantiation
 --------------------------------------------------------------------------------
 
--- A1 : FCIF can infer a type without annotation, but it does not do
---      let-generalization, so the resulting would have unsolved metas.
-
 -- No generalization
-let const2 : {A B} → A → B → B = λ x y. y in
+let A1 = λ x y. y in
 
 -- No generalization
 let A2 : IdTy → IdTy = choose id in
@@ -74,11 +71,10 @@ let A6 : {B} → IdTy → B → B = id auto2 in
 
 let A7 = choose id auto in
 
--- let A8 = choose id auto2 in -- FAILS
---   the reason is simply that the types are definitionally different,
---   the order of implicit args does not match. FCIF does *not* reorder or float out
---   implicit args, intentionally, since we support mixing implicit and explicit
---   args in arbitrary order.
+-- let A8 = choose id auto2 in -- FAILS the reason is simply that the types are
+--   definitionally different, the orders of implicit args do not match. FCIF
+--   does *not* reorder or float out implicit args, intentionally, since we
+--   support mixing implicit and explicit args in arbitrary order.
 
 -- No generalization
 let A9 : ({A} → (A → A) → List A → A) → IdTy
@@ -93,10 +89,13 @@ let A12 = id poly (λ x. x) in
 -- B: inference of polymorphic arguments
 --------------------------------------------------------------------------------
 
--- FAILS let B1 = λ f. pair (f zero) (f true) in
+-- FAILS
+-- let B1 = λ f. pair (f zero) (f true) in
 
--- FAILS let B2 = λ xs. poly (head xs) in
+-- FAILS
+-- let B2 = λ xs. poly (head xs) in
   -- however, it could possibly work with telescope application insertion + postponing
+
 
 -- C: functions on polymorphic lists
 --------------------------------------------------------------------------------
@@ -137,13 +136,13 @@ let D4 = app runST argST in
 
 let D5 = revapp argST runST in
 
--- D: η-expansion
+-- E: η-expansion
 --------------------------------------------------------------------------------
 
 -- let E1 =   -- FAILS
 --   λ (h : Int → {A} → A → A)(k : {A} → A → List A → A)(lst : List ({A} → Int → A → A)).
 --   k h lst in
---   -- fails again because of mismatched impl/expl arguments
+--   -- fails again because of mismatched implicit/explicit arguments
 
 -- No generalization
 let E2 =
@@ -153,4 +152,15 @@ let E2 =
 let E3 =
   λ (r : ({A} → A → {B} → B → B) → Int). r (λ x y. y) in
 
+let foo = (λ {A} x . id{A} x) U in
+
 U
+
+
+-- -- F: mixing
+-- --------------------------------------------------------------------------------
+
+-- let consts1 : List ({A B} → A → B → A) = nil in
+-- let consts2 = cons (λ x y. x) consts1 in
+
+-- U
