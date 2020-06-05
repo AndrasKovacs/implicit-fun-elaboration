@@ -26,6 +26,14 @@ The executable `fcif` reads an expression from standard input.
 
 See [benchmarks.fcif](benchmarks.fcif) here for an example.
 
+#### Unicode
+
+We support both unicode and ASCII characters: lambdas can be written as `\` or
+`λ` and function arrows as `->` or `→`.
+
+If you already have Agda installed with emacs mode, it is possible to use its
+unicode input mode in any buffer by `M-x` `set-input-method`, then `Agda`.
+
 #### Comparison to the paper
 
 Extra features:
@@ -56,8 +64,6 @@ Notation:
 - Inserted binders which arise from curried function insertion are named `Γn`,
   where `n` is an integer. `n` isn't particularly informative, it comes from a
   combination of fresh meta ids and telescope refining.
-- Non-unicode in surface syntax: lambdas can be written as
-  `\` and `λ`, and function arrows as `->` and `→`.
 - We print curried function types the same way as implicit function types. They can be
   disambiguated visually by having a telescope domain.
 - Curried lambdas are printed as `λ{x : a}. t` where `a` is a telescope.

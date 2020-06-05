@@ -5,6 +5,9 @@
 -- "fcif nf"   prints the normal form of the input.
 -- "fcif type" prints the type of the input.
 
+-- Note on Unicode: lambdas can be written as `\` or `λ` and function arrows as
+-- `->` or `→`.
+
 -- Examples for elaborating first-class polymorphism from
 --   https://www.microsoft.com/en-us/research/uploads/prod/2017/07/impredicative-pldi18.pdf
 -- the same examples are also found in
@@ -152,15 +155,4 @@ let E2 =
 let E3 =
   λ (r : ({A} → A → {B} → B → B) → Int). r (λ x y. y) in
 
-let foo = (λ {A} x . id{A} x) U in
-
 U
-
-
--- -- F: mixing
--- --------------------------------------------------------------------------------
-
--- let consts1 : List ({A B} → A → B → A) = nil in
--- let consts2 = cons (λ x y. x) consts1 in
-
--- U

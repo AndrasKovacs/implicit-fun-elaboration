@@ -302,6 +302,8 @@ solveMeta cxt m sp rhs = do
   -- try solving unblocked constraints
   forM_ (IS.toList blocked) tryConstancy
 
+-- | Create a fresh meta with given type, return
+--   the meta applied to all bound variables.
 freshMeta :: Cxt -> VTy -> IO Tm
 freshMeta cxt (quote (cxt^.len) -> a) = do
   let metaTy = closingTy cxt a
@@ -317,7 +319,7 @@ freshMeta cxt (quote (cxt^.len) -> a) = do
   pure (quote (cxt^.len) (VNe (HMeta m) sp))
 
 -- | Wrap the inner `UnifyError` arising from unification in an `UnifyErrorWhile`.
---   This is just the decoration of an error with one additional piece of context.
+--   This decorates an error with one additional piece of context.
 unifyWhile :: Cxt -> Val -> Val -> IO ()
 unifyWhile cxt l r =
   unify cxt l r
@@ -399,6 +401,7 @@ unify cxt l r = go l r where
 -- Elaboration
 --------------------------------------------------------------------------------
 
+-- | Insert a fresh implicit applications.
 insert' :: Cxt -> IO (Tm, VTy) -> IO (Tm, VTy)
 insert' cxt act = do
   (t, va) <- act
@@ -410,6 +413,8 @@ insert' cxt act = do
         va -> pure (t, va)
   go t va
 
+-- | Insert a fresh implicit applications to a term which is not
+--   an imlicit lambda (i.e. neutral).
 insert :: Cxt -> IO (Tm, VTy) -> IO (Tm, VTy)
 insert cxt act = act >>= \case
   (t@(Lam _ Impl _ _), va) -> pure (t, va)
@@ -464,7 +469,7 @@ check cxt topT ~topA = case (topT, force topA) of
 
 -- | We specialcase top-level lambdas (serving as postulates) for better
 --   printing: we don't print them in meta spines. We prefix the top
---   lambda-bound names with '*'. This is a bit hacky.
+--   lambda-bound names with '*'.
 inferTopLams :: Cxt -> Raw -> IO (Tm, VTy)
 inferTopLams cxt = \case
   RLam x ann i t -> do
