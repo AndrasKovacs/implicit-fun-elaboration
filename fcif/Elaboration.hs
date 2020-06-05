@@ -341,7 +341,7 @@ unify cxt l r = go l r where
 
   implArity :: Cxt -> (Val -> Val) -> Int
   implArity cxt b = go 0 (cxt^.len + 1) (b (VVar (cxt^.len))) where
-    go !acc !len a = case force a of
+    go acc len a = case force a of
       VPi _ Impl _ b -> go (acc + 1) (len + 1) (b (VVar len))
       _              -> acc
 

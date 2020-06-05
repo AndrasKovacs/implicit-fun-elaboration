@@ -315,8 +315,8 @@ inferred type is unified with the annotation.
     consider the whole program and not just particular n-ary applications.
   \item We provide an executable implementation of the elaborator described in
     this paper.
-  \item Our solution is simple: we implemented elaboration,
-    evaluation and unification in about 670 lines of Haskell, of which 215 lines
+  \item Our solution is simple: we implemented elaboration, evaluation and
+    unification in about 680 lines of Haskell, of which about 230 lines
     implement the novel enhancements on the top of Norell's basic elaborator.
   \item The target theory of elaboration serves as a general platform for
     elaborating implicit function types: our concrete elaborator is a relatively
@@ -352,12 +352,11 @@ First, we present a variant of Norell's bidirectional elaborator
 simplifications; what we end up with can be viewed as a toy version of the
 actual Agda elaborator. Our main goal with the elaborator is to have a setup
 which is as simple as possible, but sufficient to illustrate the enhancements in
-Section \ref{sec:extending_elaboration}, and make it clear that this could be
-used to conservatively extend elaboration in existing dependently typed
-languages. Hence, we do not have more fine-grained control over metavariable
-insertion, nor the advanced unification algorithms used in Agda
-\cite{abel2011higher}; all of these are orthogonal improvements to the presented
-system.
+Section \ref{sec:extending_elaboration}, which could be used to conservatively
+extend elaboration in existing dependently typed languages. Hence, we do not
+have more fine-grained control over metavariable insertion, nor the advanced
+unification algorithms used in Agda \cite{abel2011higher}; these are orthogonal
+improvements to the presented system.
 
 \begin{figure}[h]
 \begin{alignat*}{4}
@@ -702,11 +701,11 @@ $t\,\overline{\mathsf{vars}_{\Gamma}} \equiv t\,A\,B$.
               \freshMeta{\Theta}{\Gamma}{A} :\equiv
               ((\Theta,\,\alpha:\Gamma\To A),\,\p,\,\alpha\,\overline{\mathsf{vars}_{\Gamma}})}
   \end{mathpar}
-In the definition of $\freshMeta{\Theta}{\Gamma}{A}$, we extend $\Theta$ with a
-fresh meta, which has the closing type $\Gamma \To A$. The $\p$ weakening
-relates the new metacontext to the old one, by ``dropping'' the new
-entry. Lastly, $\alpha\,\overline{\mathsf{vars}_{\Gamma}}$ is the fresh meta
-applied to all bound variables.
+In the definition above, we extend $\Theta$ with a fresh meta, which has the
+closing type $\Gamma \To A$. The $\p$ weakening relates the new metacontext to
+the old one, by ``dropping'' the new entry. Lastly,
+$\alpha\,\overline{\mathsf{vars}_{\Gamma}}$ is the fresh meta applied to all
+bound variables.
 \end{definition}
 
 \subsection{Unification}
@@ -741,17 +740,16 @@ unification and metavariable pruning.
 \label{sec:elaboration}
 
 Elaboration consists of two (partial) functions, checking and inferring, which
-are defined by mutual induction on surface syntax. We also have implicit
-argument insertion as a helper function, which is defined by recursion on core
-types, and which is used as a post-processing step after inference. First, about
-the used notations:
+are defined by mutual induction on surface syntax. We also have helper functions
+for implicit argument insertion, which can be used as a post-processing step
+after inference. First, about the used notations:
 \begin{itemize}
   \item We use a Haskell-like monadic pseudocode notation, where the side effect is
     failure via $\fail$.
   \item We use pattern matching notation on core terms; e.g.\ we may match on
     whether a type is a function type. This assumes an evaluation/normalization
     procedure on core terms; but note that we already assume this in
-    unification.
+    unification. Patterns are matched in top-down order.
   \item We abbreviate $\theta_1 \circ \theta_2$ as $\theta_{12}$ and $\theta_1
     \circ \theta_2 \circ \theta_3$ as $\theta_{123}$ and analogously in other
     cases. We do this to reduce the visual noise caused by threading composed
@@ -880,7 +878,7 @@ metavariable. We define the insertion functions to take as input the output of
 $\einferblank$, so that it is more convenient to use as an optional
 post-processing step after inference.
 
-The difference between $\einsert$ and $\einsert'$ is that the latter avoids
+The difference between $\einsert$ and $\einsert'$ is that the former avoids
 insertion to implicit $\lambda$-terms. We usually want to avoid that, as it
 creates a new implicit $\beta$-redex where the fresh metavariable is often
 under-constrained. We only create such $\beta$-redex when the surface program
@@ -1071,13 +1069,13 @@ assume the following:
 List : \U \to \U \qquad nil : \{A : \U\} \to List\,A \qquad
 cons : \{A : \U\} \to A \to List\,A \to List\,A
 \]
-In Figure \ref{fig:polylist}, we present a trace of checking $cons\,(\lambda\,x.\,x)\,nil$
+Below, we present a trace of checking $cons\,(\lambda\,x.\,x)\,nil$
 at type $List\,(\{A : \U\}\to A \to A)$. We omit context and metacontext
 parameters everywhere, and mark recursive calls by indentation. We also omit
 some checking, inference, implicit insertion and unification calls which are not
 essential for illustration.
 
-\begin{figure}
+%% \begin{figure}
 \begin{alignat*}{3}
   & \scriptstyle{0 }\qquad\qquad && \echeckt{cons\,(\lambda\,x.\,x)\,\mi{nil}}{(\mi{List}\,(\{A : \U\}\to A \to A))}
      \hspace{14em}\\
@@ -1095,9 +1093,9 @@ essential for illustration.
   & \scriptstyle{12} && \qquad \unify\,(\{A : \U\}\to A \to A)\,(\alpha_1\to\alpha_1)\\
   & \scriptstyle{13} && \qquad = \fail
 \end{alignat*}
-\caption{$\mi{polyList}$ elaboration.}
-\label{fig:polylist}
-\end{figure}
+%% \caption{$\mi{polyList}$ elaboration.}
+%% \label{fig:polylist}
+%% \end{figure}
 
 Above, we first infer $\mi{cons}\,(\lambda\,x.\,x)\,\mi{nil}$, which inserts implicit
 applications to fresh metas in $cons$ and $nil$, and returns $cons\,\{\alpha_1
@@ -1367,7 +1365,7 @@ two kinds of unforced insertion choices:
 \end{enumerate}
 In the following, we shall only enhance $\lambda$-insertions
 (\ref{itm:lamins}). This allows a simple implementation which only requires
-minimal changes to unification, and which is already remarkably powerful. It
+small changes to unification, and which is already remarkably powerful. It
 seems that enhancing implicit application insertions in (\ref{itm:appins})
 requires extending unification; we discuss this in Section
 \ref{sec:appinsert}. First, we modify closing types and contextualization to
@@ -1379,8 +1377,7 @@ bound variable does not have a record type, then we do as before\footnote{This
   implies that we close over meta-headed types using plain functions. In theory,
   this causes a higher-order version of the basic implicit insertion problem: we
   are uncertain about whether we should be uncertain about implicit
-  insertions. So far, this higher-order insertion problem seems to be
-  irrelevant in practice, in the prototype implementation.}. We prepend the
+  insertions. This issue does not seem to come up in realistic programs in the prototype implementation; the first-order treatment of uncertain insertions seem to leave little remaining ``higher-order'' uncertainty on the table }. We prepend the
 following clause to Definition
 \ref{def:closingtype}:
 \[
@@ -1513,12 +1510,14 @@ as described above.
 sound to solve the constraint when the occurrence is not rigid. However, this
 way we could lose potential non-$\epsilon$ solutions of $A[\theta]$.
 
-\subsection{Unification For Strictly Curried Functions}
+\subsection{Unification For Strictly Curried Function Types}
+\label{sec:curriedunif}
 Although we omit most details of unification, we shall discuss it for curried
-functions, as it is essential in the extended elaboration algorithm. We seek to
-solve meta-telescopes in a way such that iterated implicit function types on the
-two sides of a unification problem become definitionally equal. First we define
-a helper function which counts leading implicit function types:
+function types, as it is essential in the extended elaboration algorithm. We
+seek to solve meta-telescopes in a way such that iterated implicit function
+types on the two sides of a unification problem become definitionally
+equal. First we define a helper function which counts leading implicit function
+types:
 \begin{alignat*}{3}
   & \implArity\,(\{x : A\}\to B) && :\equiv 1 + \implArity\,B\\
   & \implArity\,A                && :\equiv 0
@@ -1544,9 +1543,7 @@ We have the symmetric $\unify_{\Theta_0|\Gamma}(\{x_0 : A_0\}\to B')\,(\{x :
 \ol{A}\}\to B)$ case the same way as above.
 
 Below, let us assume that $B'$ is not meta-headed, and it also does not match
-the pattern above. Hence, either $B'$ is not an implicit function type, or the
-arity condition does not hold, so we learn that the domain telescope should be
-empty.
+the pattern above. In this case we solve the domain telescope to be empty.
 \begin{alignat*}{3}
 & \unify_{\Theta_0|\Gamma}(\{x : \ol{A}\}\to B)\,B' :\equiv \edo\\
 & \quad (\Theta_1,\,\theta_1) \leftarrow \unify_{\Theta_0|\Gamma}\,A\,\epsilon\\
@@ -1560,13 +1557,18 @@ Again, we also have the symmetric case. Some examples for unification behavior:
   fails, so either way we fall through the first rule and solve $\alpha$ to
   $\epsilon$.
 \item If $B$ is again not meta-headed, $\unify\,(\{x : \ol{\alpha}\}\to B)\,(\{x
-  : A\}\to B)$ causes $\alpha$ to be solved as $A \TCons \epsilon$.
+  : A\}\to B)$ causes $\alpha$ to be solved as $(x : A) \TCons \epsilon$.
 \end{itemize}
+Note that this algorithm matches one curried function type at a time, and does
+not recognize that multiple possible solutions exist e.g.\ in the case of
+$\unify\,(\{x : \ol{\alpha}\}\{y : \ol{\beta}\}\to C)\,(\{x : A\}\{y : B\}\to
+C)$, where we could solve $\alpha$ to $\epsilon$, or $(x : A)\TCons\epsilon$, or
+$(x : A)\TCons(y : B)\TCons\epsilon$. We leave such more sophisticated n-ary
+matching to future work.
 
 For telescopes, $\Rec$, inhabitants of $\Rec$, curried abstraction and
 application, unification is structural, and other cases remain the same as in
 the basic elaborator of Section \ref{sec:bidirectional_elaboration}.
-
 
 \subsection{Elaboration}
 
@@ -1583,12 +1585,10 @@ $\echeck{t}{\Theta}{\Gamma}{(\{x : A\}\to B)}$:
 & \quad \ereturn\,(\Theta_4,\,\theta_{1234},\,(\lambda\,\{x : \ol{A[\theta_{234}]}\}.\,t'[\theta_{34}]))
 \end{alignat*}
 Hence, when checking a term with a meta-headed type, we create a fresh meta with
-$\Tel$ type, infer a type for the term (avoiding superfluous insertion, as in
-Section \ref{sec:elaboration} when inferring type for $\lambda$-s) and wrap the
-result in a strictly curried $\lambda$. We again need to create new constancy
-constraint. This way, if $B$ does not depend on $x : \Rec\,A$, the strictly
-curried $\lambda$ in the output immediately computes away, since $A$ is solved
-to $\epsilon$.
+$\Tel$ type, infer a type for the term and wrap the result in a strictly curried
+$\lambda$. We again need to create new constancy constraint. This way, if $B$
+does not depend on $x : \Rec\,A$, the strictly curried $\lambda$ in the output
+immediately computes away, since $A$ is solved to $\epsilon$.
 
 This concludes the definition of the extended elaborator. The new algorithm is
 sound with respect to the extended core syntax, and it also has the
@@ -1720,10 +1720,10 @@ We provide an implementation of the elaborator from Section
 \ref{sec:extending_elaboration}. It is a standalone Haskell program which reads
 a surface expression from standard input, and outputs the result of elaboration,
 or optionally the type or the normal form of the result. It is implemented in
-1106 lines of Haskell. Of this, 677 lines constitute the core syntax,
-evaluation, unification and elaboration. Of these 669 lines, 462 lines implement
-the basic elaborator of Section \ref{sec:bidirectional_elaboration} and 215
-lines implement the extended elaborator.
+about 1100 lines of Haskell. Of this, 680 lines constitute the core syntax,
+evaluation, unification and elaboration. Of these 680 lines, about 450 lines
+implement the basic elaborator of Section \ref{sec:bidirectional_elaboration}
+and 230 lines implement the extended elaborator.
 
 Elaboration is implemented in the style of Coquand's algorithm
 \cite{coquand1996algorithm}, where elaboration is interleaved with
@@ -1731,8 +1731,7 @@ normalization-by-evaluation. Hence, we do not perform any substitution
 operations on core syntax, instead we evaluate core terms into the semantic
 domain, and perform unification, strengthening and occurrence checking on
 semantic values. There is also a quoting (or readback) operation which yields
-normalized core terms from values, and which is used most prominently when we
-have to generate solutions for metavariables.
+normalized core terms from values.
 
 Metacontexts are a key point in the implementation. We avoid the tedious (and
 inefficient) threading of composed metasubstitutions, instead we have a mutable
@@ -1767,7 +1766,7 @@ FCIF when comparing it to others.
 MLF \cite{le2014mlf} extends System F with polymorphic subtyping
 bounds, and supports strong inference for first class polymorphism. HML
 \cite{leijen2009flexible}) is a simplified variant of MLF. These systems rely
-critically on subtyping and thus diverge markedly from (fragments of) Martin-Löf
+critically on subtyping and thus diverge markedly from (fragments of) Martin-L\"of
 type theory. HMF \cite{leijen2008hmf} is a relatively simple system with
 first-class polymorphism; however, it is also weaker than others in terms of
 inferable annotations, and its more powerful variant (extended with n-ary
@@ -1910,7 +1909,7 @@ argument values, and skipping over arguments may clog up type computation in an
 unacceptable way.
 
 Secondly, FCIF supports global inference. For an example for this, $\slet\,x :
-\_ = \mi{single}\,\mi{id}\,\,\sin$ $\mi{cons}\,\{\mi{IdTy}\}\,x\,\mi{nil}$ works
+\_ = \mi{single}\,\mi{id}\,\,\sin$ $\mi{cons}\,\{\mi{List}\,\mi{IdTy}\}\,x\,\mi{nil}$ works
 in FCIF, MLF and HML but does not work in GI, QL and HMF. MLF and HML work here
 by immediately giving a principal type to $\mi{single}\,\mi{id}$ which involves
 generalization with a subtyping bound. In contrast, FCIF makes no promises about
