@@ -1586,7 +1586,7 @@ $\echeck{t}{\Theta}{\Gamma}{(\{x : A\}\to B)}$:
 \end{alignat*}
 Hence, when checking a term with a meta-headed type, we create a fresh meta with
 $\Tel$ type, infer a type for the term and wrap the result in a strictly curried
-$\lambda$. We again need to create new constancy constraint. This way, if $B$
+$\lambda$. We again need to create a new constancy constraint. This way, if $B$
 does not depend on $x : \Rec\,A$, the strictly curried $\lambda$ in the output
 immediately computes away, since $A$ is solved to $\epsilon$.
 
