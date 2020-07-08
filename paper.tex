@@ -334,7 +334,7 @@ inferred type is unified with the annotation.
     simple one, and there is room to further develop it.
 \end{itemize}
 
-\subsubsection{Note on terminology}
+\subsection{Note on Terminology}
 
 We prefer to avoid the term ``impredicative inference'' in order to avoid
 confusion with impredicativity in type theory. The two notions sometimes
@@ -524,7 +524,7 @@ avoid needless noise.
 Function types only differ from each other in notation: implicit
 functions have the same rules as ``explicit'' functions. The primary purpose of
 implicit function types is to \emph{guide elaboration}: the elaborator will at
-times compute a type and branch on whether it is an implicit function.
+times compute a type and branch on whether it is an implicit function type.
 
 We avoid a fully formal presentation in this paper. For examples of what such a
 presentation looks like, see \cite{decidableconv} or \cite{coqnbe}. Some notes
@@ -541,9 +541,9 @@ on what is elided:
     defined variables form morphisms of a category, where the identity
     substitution $\id$ maps each variable to itself and composition
     $\blank\circ\blank$ is given by pointwise substitution. The action of
-    parallel substitution on terms is functorial, i.e.\ $t[\sigma][\delta]
-    \equiv t[\sigma\circ\delta]$ and $t[\id] \equiv t$, and typing is stable
-    under substitution.
+    parallel substitution on terms is functorial, i.e.\ $t[\sigma\circ\delta]
+    \equiv t[\sigma][\delta]$ and $t[\id] \equiv t$, and typing is stable under
+    substitution.
   \item
     Definitional equality is understood to be a congruence and an equivalence relation,
     which is respected by substitution and typing.
@@ -767,6 +767,7 @@ after inference. First, about the used notations:
     metasubstitutions everywhere in the elaboration algorithm.
 \end{itemize}
 We present the specifications and definitions below, then we describe them in order.
+
 \begin{mathpar}
 \inferrule*[lab=insertion,flushleft]{\Theta_0|\Gamma\vdash \\ (\Theta,\,\theta,\,t,\,A) \in
              \{(\Theta,\,\theta,\,t,\,A)\,|\,(\theta : \Theta \To \Theta_0)\,\land\,
@@ -805,6 +806,7 @@ We present the specifications and definitions below, then we describe them in or
                (\Theta'|\Gamma[\theta]\vdash t' : A)\}\cup\{\fail\}
            }
 \end{mathpar}
+
 \begin{alignat*}{3}
   &\echeck{\lambda\,x.\,t}{\Theta}{\Gamma}{((x : A)\to B)} :\equiv \edo \\
   &\quad(\Theta',\,\theta,\,t') \leftarrow \echeck{t}{\Theta}{\Gamma,\,x:A} B\\
@@ -880,7 +882,7 @@ We present the specifications and definitions below, then we describe them in or
   &\quad \ereturn\,(\freshMeta{\Theta'}{\Gamma[\theta]}{A})\\
 \end{alignat*}
 \endgroup
-\subsubsection{Implicit argument insertion}
+\subsubsection{Implicit Argument Insertion}
 We define two functions, $\einsert'$ and $\einsert$ which insert implicit
 applications around a core term. For example, if we have a defined name $id$
 with type $\{A : \U\}\to A \to A$ in a surface program, we usually want to
@@ -982,12 +984,12 @@ In the case of $\slet$, inference again just falls through, and we infer a type
 for the $\slet$ body. For $\einfer{\_}{\Theta}{\Gamma}$, we create a fresh meta
 for the type of the hole, and another fresh meta for the hole itself.
 
-\subsubsection{Starting and finishing elaboration} Given a surface term $t$,
+\subsubsection{Starting and Finishing Elaboration} Given a surface term $t$,
 we initiate elaboration by computing $\einfer{t}{\emptycon}{\emptycon}$. If this
 succeeds, we get a $(\Theta,\,\theta,t')$ result. Elaboration is successful overall
 if $\Theta = \emptycon$ and $\theta = \id$, i.e.\ no unsolved metas remain.
 
-\subsubsection{Properties of elaboration}
+\subsubsection{Properties of Elaboration}
 First, elaboration is \emph{sound} in the sense that it only produces well-formed
 output.
 
@@ -1044,7 +1046,7 @@ $\lambda$-s in the surface syntax are not annotated, and it is easy to find core
 $\lambda$ expressions with uninferable domain types. We skip optional surface
 $\lambda$ domain type annotations for the sake of brevity.
 
-\subsubsection{Omitted features}
+\subsubsection{Omitted Features}
 
 \begin{itemize}
   \item \emph{Let-generalization}. This is an open research topic in settings
@@ -1180,10 +1182,9 @@ judgments. Hence, the sides of the equations must have the same types, and in
 particular the left side of the \LabTirName{${[}{]}$-$\eta$} rule has type
 $\Rec\,\epsilon$.
 
-\subsubsection{On metatheoretical properties of the core syntax}
 We naturally want to make sure that the extended core syntax is still sensible.
-In relation to type theories, the following three properties are commonly
-considered.
+In relation to type theories, the following three metatheoretical properties are
+commonly considered.
 \begin{itemize}
   \item A theory is \emph{consistent} if not every closed type has a closed
     inhabitant. An inconsistent theory cannot be used as a \emph{logic}, from
@@ -1435,7 +1436,7 @@ the surface input. In the case of $\slet\,x : \_ = \mi{true}$, the old elaborato
 checks $\mi{true}$ with a fresh meta, and just assumes that the meta does not stand
 for an implicit function type.
 
-\subsubsection{Constancy constraints}
+\subsubsection{Constancy Constraints}
 We use these constraints to get rid of curried function types as soon as we
 learn that they are non-dependent. They are constraints in the usual sense in
 unification algorithms (e.g.\ as in \cite{abel2011higher} or
@@ -1489,7 +1490,7 @@ returning a weakening substitution.
 \]
 \end{definition}
 
-\subsubsection{Algorithmic implementation of constraint solving}
+\subsubsection{Algorithmic Implementation of Constraint Solving}
 \label{sec:algorithmic}
 The above specification for constancy constraints is compact but not
 particularly algorithmic: we just magically get new definitional equalities
