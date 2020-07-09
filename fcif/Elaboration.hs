@@ -401,7 +401,7 @@ unify cxt l r = go l r where
 -- Elaboration
 --------------------------------------------------------------------------------
 
--- | Insert a fresh implicit applications.
+-- | Insert fresh implicit applications.
 insert' :: Cxt -> IO (Tm, VTy) -> IO (Tm, VTy)
 insert' cxt act = do
   (t, va) <- act
@@ -413,8 +413,8 @@ insert' cxt act = do
         va -> pure (t, va)
   go t va
 
--- | Insert a fresh implicit applications to a term which is not
---   an imlicit lambda (i.e. neutral).
+-- | Insert fresh implicit applications to a term which is not
+--   an implicit lambda (i.e. neutral).
 insert :: Cxt -> IO (Tm, VTy) -> IO (Tm, VTy)
 insert cxt act = act >>= \case
   (t@(Lam _ Impl _ _), va) -> pure (t, va)
