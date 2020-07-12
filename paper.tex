@@ -1707,24 +1707,24 @@ Section \ref{sec:superfluous}. Again, assume $\mi{Bool} : \U$ and $\mi{true} : \
 & \scriptstyle{0}\qquad\qquad && \einfert{\slet\,x : \_ = \mi{true}\,\sin\,x}
       \hspace{21em}\\
 & \scriptstyle{1} && \quad \echeckt{\_}{\U} = \alpha_0\\
-& \scriptstyle{3} && \quad \echeckt{\mi{true}}{\alpha_0}\\
-& \scriptstyle{4} && \qquad \mathsf{freshMeta}\,\Tel = \alpha_1\\
-& \scriptstyle{6} && \qquad \einfert{\mi{true}}\,= \mi{true} : \mi{Bool}\\
-& \scriptstyle{8} && \qquad \mathsf{newConstancy}_{\emptycon,\,x : \Rec\,\alpha_1}\,\mi{Bool}\\
-& \scriptstyle{9} && \qquad\quad \unify\,\alpha_1\,\epsilon\\
-& \scriptstyle{10} && \qquad \unify\,\alpha_0\,\mi{Bool}\\
-& \scriptstyle{11} && \quad = \mi{true}\\
-& \scriptstyle{12} && \quad \einfert{x}{\mi{true}} = \mi{true} : \mi{Bool}\\
-& \scriptstyle{14} && = (\slet\,x : \mi{Bool} = \mi{true}\,\sin\,x) : \mi{Bool}
+& \scriptstyle{2} && \quad \echeckt{\mi{true}}{\alpha_0}\\
+& \scriptstyle{3} && \qquad \mathsf{freshMeta}\,\Tel = \alpha_1\\
+& \scriptstyle{4} && \qquad \einfert{\mi{true}}\,= \mi{true} : \mi{Bool}\\
+& \scriptstyle{5} && \qquad \mathsf{newConstancy}_{\emptycon,\,x : \Rec\,\alpha_1}\,\mi{Bool}\\
+& \scriptstyle{6} && \qquad\quad \unify\,\alpha_1\,\epsilon\\
+& \scriptstyle{7} && \qquad \unify\,\alpha_0\,\mi{Bool}\\
+& \scriptstyle{8} && \quad = \mi{true}\\
+& \scriptstyle{9} && \quad \einfert{x}{\mi{true}} = \mi{true} : \mi{Bool}\\
+& \scriptstyle{10} && = (\slet\,x : \mi{Bool} = \mi{true}\,\sin\,x) : \mi{Bool}
 \end{alignat*}
-First we create a fresh meta $\alpha_0$ for the hole on line $\scriptstyle{2}$,
+First we create a fresh meta $\alpha_0$ for the hole on line $\scriptstyle{1}$,
 then we check $\mi{true}$ with it. Since we are checking with a meta-headed type, we
 create a fresh telescope meta $\alpha_1$, then infer $\mi{Bool}$ for
-$\mi{true}$. On line $\scriptstyle{8}$ we create a constancy constraint and
+$\mi{true}$. On line $\scriptstyle{5}$ we create a constancy constraint and
 immediately try to solve it, as described in Section
 \ref{sec:algorithmic}. Since $\mi{Bool}$ does not depend on the domain, we solve
 the constraint and thereby solve $\alpha_1$ as $\epsilon$. Hence, we simply
-return $\mi{true}$ on line $\scriptstyle{11}$, since $\lambda\,\{x :
+return $\mi{true}$ on line $\scriptstyle{8}$, since $\lambda\,\{x :
 \ol{\epsilon}\}.\,\mi{true}$ computes to that, and elaboration succeeds with the
 expected output.
 \end{example}
