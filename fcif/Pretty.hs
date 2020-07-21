@@ -65,6 +65,15 @@ pi ns (PiTel (fresh ns -> x) a b) | x /= "_" =
   piBind ns x Impl a . pi (x:ns) b
 pi ns t = (" → "++) . tm tmp ns t
 
+stage :: StageExp -> ShowS
+stage = \case
+  SVar x -> ('?':).(show x++)
+  SSuc s -> showParen True (("Suc "++).stage s)
+  SLit s -> (show s++)
+
+instance Show StageExp where
+  show s = stage s []
+
 tm :: Int -> [Name] -> Tm -> ShowS
 tm p ns = \case
   Var x  -> case ns !! x of
@@ -73,7 +82,7 @@ tm p ns = \case
     n     -> (n++)
   Meta m ->
     ("?"++).(show m++)
-  Let (fresh ns -> x) a t u ->
+  Let (fresh ns -> x) a _ t u ->
     par tmp p $
       ("let "++).(x++).(" : "++). tm tmp ns a . ("\n    = "++)
       . tm tmp ns t . ("\nin\n"++) . tm tmp (x:ns) u
@@ -89,8 +98,8 @@ tm p ns = \case
   Pi (fresh ns -> x) i a b ->
     par tmp p $ piBind ns x i a . pi (x:ns) b
 
-  U      -> ("U"++)
-  Tel    -> ("Tel"++)
+  U s    -> par appp p (("U "++) . stage s)
+  Tel s  -> par appp p (("Tel "++) . stage s)
   TEmpty -> ("ε"++)
 
   TCons "_" a as ->
@@ -114,6 +123,10 @@ tm p ns = \case
     par tmp p $ ("λ"++) . lamTelBind ns x a . lams (x:ns) t
 
   Skip t -> tm p ("_":ns) t
+
+  Code a -> par appp p $ ("^"++) . tm atomp ns a
+  Up t   -> ('<':).tm tmp ns t.('>':)
+  Down t -> par appp p $ ("~"++) . tm atomp ns t
 
 -- | We specialcase printing of top lambdas, since they are usually used
 --   to postulate stuff. We use '*' in a somewhat hacky way to mark

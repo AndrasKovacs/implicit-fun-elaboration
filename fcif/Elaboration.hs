@@ -14,6 +14,10 @@ import Evaluation
 import ElabState
 import Errors
 
+import Pretty
+
+import Debug.Trace
+
 -- Context operations
 --------------------------------------------------------------------------------
 
@@ -21,18 +25,18 @@ emptyCxt :: Cxt
 emptyCxt = Cxt VNil TNil [] [] 0
 
 -- | Add a bound variable.
-bind :: Name -> NameOrigin -> VTy -> Cxt -> Cxt
-bind x o ~a (Cxt vs tys ns no d) =
-  Cxt (VSkip vs) (TBound tys a) (x:ns) (o:no) (d + 1)
+bind :: Name -> NameOrigin -> VTy -> StageExp -> Cxt -> Cxt
+bind x o ~a s (Cxt vs tys ns no d) =
+  Cxt (VSkip vs) (TBound tys a s) (x:ns) (o:no) (d + 1)
 
 -- | Add a bound variable which comes from surface syntax.
-bindSrc :: Name -> VTy -> Cxt -> Cxt
+bindSrc :: Name -> VTy -> StageExp -> Cxt -> Cxt
 bindSrc x = bind x NOSource
 
 -- | Define a new variable.
-define :: Name -> VTy -> Val -> Cxt -> Cxt
-define x ~a ~t (Cxt vs tys ns no d) =
-  Cxt (VDef vs t) (TDef tys a) (x:ns) (NOSource:no) (d + 1)
+define :: Name -> VTy -> StageExp -> Val -> Cxt -> Cxt
+define x ~a ~s ~t (Cxt vs tys ns no d) =
+  Cxt (VDef vs t) (TDef tys a s) (x:ns) (NOSource:no) (d + 1)
 
 -- | Lift ("skolemize") a value in an extended context to a function in a
 --   non-extended context.
@@ -86,8 +90,8 @@ occurs d topX = occurs' d mempty where
       VNe (HMeta m) sp            -> goSp (IS.insert m ms) sp
       VPi _ i a b   -> go a <> goBind b
       VLam _ i a t  -> go a <> goBind t
-      VU            -> mempty
-      VTel          -> mempty
+      VU _          -> mempty
+      VTel s        -> mempty
       VRec a        -> go a
       VTEmpty       -> mempty
       VTCons _ a b  -> go a <> goBind b
@@ -96,11 +100,14 @@ occurs d topX = occurs' d mempty where
       VPiTel x a b  -> go a <> goBind b
       VLamTel x a t -> go a <> goBind t
 
+      VCode a       -> go a
+      VUp t         -> go t
+      VDown t       -> go t
 
 -- | Attempt to solve a constancy constraint.
 tryConstancy :: MId -> IO ()
 tryConstancy constM = lookupMeta constM >>= \case
-  Constancy cxt dom cod blockers -> do
+  Constancy cxt dom s cod blockers -> do
 
     -- clear blockers
     forM_ (IS.toList blockers) $ \m -> do
@@ -112,7 +119,7 @@ tryConstancy constM = lookupMeta constM >>= \case
     let dropConstancy = alterMeta constM (const Nothing)
 
     case occurs (cxt^.len + 1) (cxt^.len) cod of
-      None    -> unify cxt dom VTEmpty >> dropConstancy
+      None    -> unify cxt dom VTEmpty s >> dropConstancy
       Rigid   -> dropConstancy
       Flex ms -> do
         -- set new blockers
@@ -121,13 +128,13 @@ tryConstancy constM = lookupMeta constM >>= \case
             Unsolved ms a -> Unsolved (IS.insert constM ms) a
             _             -> error "impossible"
 
-        writeMeta constM $ Constancy cxt dom cod ms
+        writeMeta constM $ Constancy cxt dom s cod ms
 
   _ -> error "impossible"
 
-newConstancy :: Cxt -> VTy -> (Val -> Val) -> IO ()
-newConstancy cxt dom cod =
-  tryConstancy =<< newMeta (Constancy cxt dom (cod (VVar (cxt^.len))) mempty)
+newConstancy :: Cxt -> VTy -> StageExp -> (Val -> Val) -> IO ()
+newConstancy cxt dom s cod =
+  tryConstancy =<< newMeta (Constancy cxt dom s (cod (VVar (cxt^.len))) mempty)
 
 -- Unification
 --------------------------------------------------------------------------------
@@ -160,9 +167,9 @@ checkSp = (over _3 reverse <$>) . go . forceSp where
 closingTy :: Cxt -> Ty -> Ty
 closingTy cxt = go (cxt^.types) (cxt^.names) (cxt^.len) where
   go TNil                  []     d b = b
-  go (TDef tys a)          (x:ns) d b = go tys ns (d-1) (Skip b)
-  go (TBound tys (VRec a)) (x:ns) d b = go tys ns (d-1) (PiTel x (quote (d-1) a) b)
-  go (TBound tys a)        (x:ns) d b = go tys ns (d-1) (Pi x Expl (quote (d-1) a) b)
+  go (TDef tys a s)          (x:ns) d b = go tys ns (d-1) (Skip b)
+  go (TBound tys (VRec a) _) (x:ns) d b = go tys ns (d-1) (PiTel x (quote (d-1) a) b)
+  go (TBound tys a _)        (x:ns) d b = go tys ns (d-1) (Pi x Expl (quote (d-1) a) b)
   go _                     _      _ _ = error "impossible"
 
 -- | Close a term by wrapping it in `Int` number of lambdas, while taking the domain
@@ -256,8 +263,8 @@ strengthen str = go where
 
     VPi x i a b      -> Pi x i <$> go a <*> goBind b
     VLam x i a t     -> Lam x i <$> go a <*> goBind t
-    VU               -> pure U
-    VTel             -> pure Tel
+    VU s             -> pure (U (vStage s))
+    VTel s           -> pure (Tel (vStage s))
     VRec a           -> Rec <$> go a
     VTEmpty          -> pure TEmpty
     VTCons x a b     -> TCons x <$> go a <*> goBind b
@@ -265,6 +272,9 @@ strengthen str = go where
     VTcons t u       -> Tcons <$> go t <*> go u
     VPiTel x a b     -> PiTel x <$> go a <*> goBind b
     VLamTel x a t    -> LamTel x <$> go a <*> goBind t
+    VCode a          -> Code <$> go a
+    VUp t            -> Up <$> go t
+    VDown t          -> Down <$> go t
 
   goBind t = strengthen (liftStr str) (t (VVar (str^.cod)))
 
@@ -302,6 +312,10 @@ solveMeta cxt m sp rhs = do
   -- try solving unblocked constraints
   forM_ (IS.toList blocked) tryConstancy
 
+-- | Create a fresh stage metavariable.
+freshStage :: IO StageExp
+freshStage = SVar <$> newStageVar Nothing
+
 -- | Create a fresh meta with given type, return
 --   the meta applied to all bound variables.
 freshMeta :: Cxt -> VTy -> IO Tm
@@ -310,25 +324,42 @@ freshMeta cxt (quote (cxt^.len) -> a) = do
   m <- newMeta $ Unsolved mempty (eval VNil metaTy)
 
   let vars :: Types -> (Spine, Lvl)
-      vars TNil                                 = (SNil, 0)
-      vars (TDef (vars -> (sp, !d)) _)          = (sp, d + 1)
-      vars (TBound (vars -> (sp, !d)) (VRec a)) = (SAppTel a sp (VVar d), d + 1)
-      vars (TBound (vars -> (sp, !d)) _)        = (SApp sp (VVar d) Expl, d + 1)
+      vars TNil                                   = (SNil, 0)
+      vars (TDef (vars -> (sp, !d)) _ _)          = (sp, d + 1)
+      vars (TBound (vars -> (sp, !d)) (VRec a) _) = (SAppTel a sp (VVar d), d + 1)
+      vars (TBound (vars -> (sp, !d)) _ _)        = (SApp sp (VVar d) Expl, d + 1)
 
   let sp = fst $ vars (cxt^.types)
   pure (quote (cxt^.len) (VNe (HMeta m) sp))
 
 -- | Wrap the inner `UnifyError` arising from unification in an `UnifyErrorWhile`.
 --   This decorates an error with one additional piece of context.
-unifyWhile :: Cxt -> Val -> Val -> IO ()
-unifyWhile cxt l r =
-  unify cxt l r
+unifyWhile :: Cxt -> Val -> Val -> StageExp -> IO ()
+unifyWhile cxt l r s =
+  unify cxt l r s
   `catch`
   (report (cxt^.names) . UnifyErrorWhile (quote (cxt^.len) l) (quote (cxt^.len) r))
 
+
+solveStage :: StageId -> StageExp -> IO ()
+solveStage x s =
+  modifyStageVar x $ maybe (Just s) (error "impossible")
+
+unifyStage :: StageExp -> StageExp -> IO ()
+unifyStage s s' = go (vStage s) (vStage s') where
+  go (SVar x) (SVar x') | x == x' = pure ()
+  go (SSuc s) (SSuc s') = go s s'
+  go (SLit s) (SLit s') | s == s' = pure ()
+  go (SSuc s) (SLit s') | s' /= 0 = go s (SLit (s' - 1))
+  go (SLit s) (SSuc s') | s /= 0  = go (SLit (s - 1)) s'
+  go (SVar x) s' = solveStage x s'
+  go s (SVar x') = solveStage x' s
+  go s s' = report [] $ StageError s s'
+
+
 -- | May throw `UnifyError`.
-unify :: Cxt -> Val -> Val -> IO ()
-unify cxt l r = go l r where
+unify :: Cxt -> Val -> Val -> StageExp -> IO ()
+unify cxt l r topS = go l r where
 
   unifyError =
     throwIO $ UnifyError (cxt^.names) (quote (cxt^.len) l) (quote (cxt^.len) r)
@@ -350,46 +381,57 @@ unify cxt l r = go l r where
     (VLam x i a t, t')                       -> goBind x a t (\ ~v -> vApp t' v i)
     (t, VLam x' i' a' t')                    -> goBind x' a' (\ ~v -> vApp t v i') t'
     (VPi x i a b, VPi x' i' a' b') | i == i' -> go a a' >> goBind x a b b'
-    (VU, VU)                                 -> pure ()
-    (VTel, VTel)                             -> pure ()
+    (VU s, VU s')                            -> unifyStage s s'
+    (VTel _, VTel _)                         -> pure ()
     (VRec a, VRec a')                        -> go a a'
     (VTEmpty, VTEmpty)                       -> pure ()
     (VTCons x a b, VTCons x' a' b')          -> go a a' >> goBind x a b b'
-    (VTempty, VTempty)                       -> pure ()
+    (VTempty, _)                             -> pure ()
+    (_, VTempty)                             -> pure ()
     (VTcons t u, VTcons t' u')               -> go t t' >> go u u'
+    (VTcons t u, t')                         -> go t (vProj1 t') >> go u (vProj2 t')
+    (t, VTcons t' u')                        -> go (vProj1 t) t' >> go (vProj2 t) u'
     (VPiTel x a b, VPiTel x' a' b')          -> go a a' >> goBind x (VRec a) b b'
     (VLamTel x a t, VLamTel x' a' t')        -> goBind x (VRec a) t t'
     (VLamTel x a t, t')                      -> goBind x (VRec a) t (vAppTel a t')
     (t, VLamTel x' a' t')                    -> goBind x' (VRec a') (vAppTel a' t) t'
+
+    (VCode a, VCode a')                      -> unify cxt a a' (vPred topS)
+    (VUp t, VUp t')                          -> unify cxt t t' (vPred topS)
+    (VUp t, t')                              -> unify cxt t (vDown t') (vPred topS)
+    (t, VUp t')                              -> unify cxt (vDown t) t' (vPred topS)
+    (VDown t, VDown t')                      -> unify cxt t t' (vSSuc topS)
+
     (VNe h sp, VNe h' sp') | h == h'         -> goSp (forceSp sp) (forceSp sp')
     (VNe (HMeta m) sp, VNe (HMeta m') sp')   -> flexFlex m sp m' sp'
     (VNe (HMeta m) sp, t')                   -> solveMeta cxt m sp t'
     (t, VNe (HMeta m') sp')                  -> solveMeta cxt m' sp' t
 
     (VPiTel x a b, VPi x' Impl a' b') | implArity cxt b < implArity cxt b' + 1 -> do
-      let cxt' = bindSrc x' a' cxt
-      m <- freshMeta cxt' VTel
+      let cxt' = bindSrc x' a' topS cxt
+      m <- freshMeta cxt' (VTel topS)
       let vm = eval (cxt'^.vals) m
       go a (VTCons x' a' (liftVal cxt vm))
       let b2 ~x1 ~x2 = b (VTcons x1 x2)
-      newConstancy cxt' vm (b2 (VVar (cxt^.len)))
+      newConstancy cxt' vm topS (b2 (VVar (cxt^.len)))
       goBind x' a' (\ ~x1 -> VPiTel x (liftVal cxt vm x1) (b2 x1)) b'
 
-    (VPi x' Impl a' b', VPiTel x a b) | implArity cxt b < implArity cxt b' + 1-> do
-      let cxt' = bindSrc x' a' cxt
-      m <- freshMeta cxt' VTel
+    (VPi x' Impl a' b', VPiTel x a b) | implArity cxt b < implArity cxt b' + 1 -> do
+      let cxt' = bindSrc x' a' topS cxt
+      m <- freshMeta cxt' (VTel topS)
       let vm = eval (cxt'^.vals) m
       go a (VTCons x' a' (liftVal cxt vm))
       let b2 ~x1 ~x2 = b (VTcons x1 x2)
-      newConstancy cxt' vm (b2 (VVar (cxt^.len)))
+      newConstancy cxt' vm topS (b2 (VVar (cxt^.len)))
       goBind x' a' b' (\ ~x1 -> VPiTel x (liftVal cxt vm x1) (b2 x1))
 
     (VPiTel x a b, t) -> go a VTEmpty >> go (b VTempty) t
     (t, VPiTel x a b) -> go a VTEmpty >> go t (b VTempty)
+
     _                 -> unifyError
 
   goBind x a t t' =
-    let v = VVar (cxt^.len) in unify (bindSrc x a cxt) (t v) (t' v)
+    let v = VVar (cxt^.len) in unify (bindSrc x a topS cxt) (t v) (t' v) topS
 
   goSp sp sp' = case (sp, sp') of
     (SNil, SNil)                            -> pure ()
@@ -402,159 +444,195 @@ unify cxt l r = go l r where
 --------------------------------------------------------------------------------
 
 -- | Insert fresh implicit applications.
-insert' :: Cxt -> IO (Tm, VTy) -> IO (Tm, VTy)
+insert' :: Cxt -> IO (Tm, VTy, StageExp) -> IO (Tm, VTy, StageExp)
 insert' cxt act = do
-  (t, va) <- act
+  (t, va, s) <- act
   let go t va = case force va of
         VPi x Impl a b -> do
           m <- freshMeta cxt a
           let mv = eval (cxt^.vals) m
           go (App t m Impl) (b mv)
-        va -> pure (t, va)
+        va -> pure (t, va, s)
   go t va
 
 -- | Insert fresh implicit applications to a term which is not
 --   an implicit lambda (i.e. neutral).
-insert :: Cxt -> IO (Tm, VTy) -> IO (Tm, VTy)
+insert :: Cxt -> IO (Tm, VTy, StageExp) -> IO (Tm, VTy, StageExp)
 insert cxt act = act >>= \case
-  (t@(Lam _ Impl _ _), va) -> pure (t, va)
-  (t                 , va) -> insert' cxt (pure (t, va))
+  (t@(Lam _ Impl _ _), va, s) -> pure (t, va, s)
+  res                         -> insert' cxt (pure res)
 
-check :: Cxt -> Raw -> VTy -> IO Tm
-check cxt topT ~topA = case (topT, force topA) of
+inferU :: Cxt -> Raw -> IO (Tm, StageExp)
+inferU cxt t = do
+  (t, a, s) <- infer cxt t
+  unifyWhile cxt a (VU s) s
+  pure (t, s)
+
+checkU :: Cxt -> Raw -> StageExp -> IO Tm
+checkU cxt t s = check cxt t (VU s) s
+
+check :: Cxt -> Raw -> VTy -> StageExp -> IO Tm
+check cxt topT ~topA topS = case (topT, force topA) of
   (RSrcPos p t, a) ->
-    addSrcPos p (check cxt t a)
+    addSrcPos p (check cxt t a topS)
 
   (RLam x ann i t, VPi x' i' a b) | i == i' -> do
     ann <- case ann of
       Just ann -> do
-        ann <- check cxt ann VU
-        unifyWhile cxt (eval (cxt^.vals) ann) a
+        ann <- checkU cxt ann topS
+        unifyWhile cxt (eval (cxt^.vals) ann) a topS
         pure ann
       Nothing ->
         pure $ quote (cxt^.len) a
-    t <- check (bind x NOSource a cxt) t (b (VVar (cxt^.len)))
+    t <- check (bind x NOSource a topS cxt) t (b (VVar (cxt^.len))) topS
     pure $ Lam x i ann t
 
   (t, VPi x Impl a b) -> do
-    t <- check (bind x NOInserted a cxt) t (b (VVar (cxt^.len)))
+    t <- check (bind x NOInserted a topS cxt) t (b (VVar (cxt^.len))) topS
     pure $ Lam x Impl (quote (cxt^.len) a) t
 
   -- inserting a new curried function lambda
   (t, VNe (HMeta _) _) -> do
     x <- ("Γ"++) . show <$> readIORef nextMId
-    dom <- freshMeta cxt VTel
+    dom <- freshMeta cxt (VTel topS)
     let vdom = eval (cxt^.vals) dom
-    let cxt' = bind x NOInserted (VRec vdom) cxt
-    (t, liftVal cxt -> a) <- insert cxt' $ infer cxt' t
-    newConstancy cxt vdom a
-    unifyWhile cxt topA (VPiTel x vdom a)
+    let cxt' = bind x NOInserted (VRec vdom) topS cxt
+    (t, (liftVal cxt -> a), s) <- insert cxt' $ infer cxt' t
+    unifyStage s topS
+    newConstancy cxt vdom topS a
+    unifyWhile cxt topA (VPiTel x vdom a) topS
     pure $ LamTel x dom t
 
+  (RUp t, VCode a) -> do
+    Up <$> check cxt t a (vPred topS)
+
+  (RDown t, a) -> do
+    Down <$> check cxt t (VCode a) (vSSuc topS)
+
   (RLet x a t u, topA) -> do
-    a <- check cxt a VU
+    (a, s) <- inferU cxt a
     let ~va = eval (cxt^.vals) a
-    t <- check cxt t va
+    t <- check cxt t va s
     let ~vt = eval (cxt^.vals) t
-    u <- check (define x va vt cxt) u topA
-    pure $ Let x a t u
+    u <- check (define x va s vt cxt) u topA topS
+    pure $ Let x a s t u
 
   (RHole, topA) -> do
     freshMeta cxt topA
 
   (t, topA) -> do
-    (t, va) <- insert cxt $ infer cxt t
-    unifyWhile cxt va topA
+    (t, va, s) <- insert cxt $ infer cxt t
+    unifyStage s topS
+    unifyWhile cxt va topA topS
     pure t
 
 -- | We specialcase top-level lambdas (serving as postulates) for better
 --   printing: we don't print them in meta spines. We prefix the top
 --   lambda-bound names with '*'.
-inferTopLams :: Cxt -> Raw -> IO (Tm, VTy)
+inferTopLams :: Cxt -> Raw -> IO (Tm, VTy, StageExp)
 inferTopLams cxt = \case
   RLam x ann i t -> do
-    a <- case ann of
-      Just ann -> check cxt ann VU
-      Nothing  -> freshMeta cxt VU
+    traceM "inferlam"
+    (a, s) <- case ann of
+      Just ann -> inferU cxt ann
+      Nothing  -> do
+        s <- freshStage
+        m <- freshMeta cxt (VU s)
+        pure (m, s)
+    traceShowM (a, s)
     let ~va = eval (cxt^.vals) a
-    (t, liftVal cxt -> b) <- inferTopLams (bind ('*':x) NOSource va cxt) t
-    pure (Lam x i a t, VPi x i va b)
+    (t, liftVal cxt -> b, s') <- inferTopLams (bind ('*':x) NOSource va s cxt) t
+    traceM (showTm (('*':x) : (cxt^.names)) t)
+    traceShowM s'
+    unifyStage s s'
+    pure (Lam x i a t, VPi x i va b, s')
   RSrcPos p t ->
     addSrcPos p $ inferTopLams cxt t
 
   t -> insert cxt $ infer cxt t
 
-infer :: Cxt -> Raw -> IO (Tm, VTy)
+infer :: Cxt -> Raw -> IO (Tm, VTy, StageExp)
 infer cxt = \case
   RSrcPos p t -> addSrcPos p $ infer cxt t
 
-  RU -> pure (U, VU)
+  RU s -> do
+    s <- maybe freshStage (pure . SLit) s
+    pure (U s, VU s, s)
 
   RVar x -> do
-    let go :: [Name] -> [NameOrigin] -> Types -> Int -> IO (Tm, VTy)
-        go (y:xs) (NOSource:os) (TSnoc _  a) i | x == y || ('*':x) == y = pure (Var i, a)
-        go (_:xs) (_       :os) (TSnoc as _) i = go xs os as (i + 1)
-        go []     []            TNil         _ = report (cxt^.names) (NameNotInScope x)
+    let go :: [Name] -> [NameOrigin] -> Types -> Int -> IO (Tm, VTy, StageExp)
+        go (y:xs) (NOSource:os) (TSnoc _  a s) i | x == y || ('*':x) == y = pure (Var i, a, s)
+        go (_:xs) (_       :os) (TSnoc as _ _) i = go xs os as (i + 1)
+        go []     []            TNil           _ = report (cxt^.names) (NameNotInScope x)
         go _ _ _ _ = error "impossible"
     go (cxt^.names) (cxt^.nameOrigin) (cxt^.types) 0
 
   RPi x i a b -> do
-    a <- check cxt a VU
+    (a, s) <- inferU cxt a
     let ~va = eval (cxt^.vals) a
-    b <- check (bind x NOSource va cxt) b VU
-    pure (Pi x i a b, VU)
+    b <- checkU (bind x NOSource va s cxt) b s
+    pure (Pi x i a b, VU s, s)
 
   RApp t u i -> do
-    (t, va) <- case i of Expl -> insert' cxt $ infer cxt t
-                         _    -> infer cxt t
+    (t, va, s) <- case i of Expl -> insert' cxt $ infer cxt t
+                            _    -> infer cxt t
     case force va of
-      va -> do
-        a0 <- eval (cxt^.vals) <$> freshMeta cxt VU
-        a1 <- freshMeta (bind "x" NOInserted a0 cxt) VU
-        let a1' x = eval (VDef (cxt^.vals) x) a1
-        unifyWhile cxt va (VPi "x" i a0 a1')
-        u <- check cxt u a0
-        pure (App t u i, a1' (eval (cxt^.vals) u))
-
-  -- -- variant with better error messages and fewer generated metavariables
-  -- RApp t u i -> do
-  --   (t, va) <- case i of Expl -> insert' cxt $ infer cxt t
-  --                        _    -> infer cxt t
-  --   case force va of
-  --     VPi x i' a b -> do
-  --       unless (i == i') $
-  --         report (cxt^.names) $ IcitMismatch i i'
-  --       u <- check cxt u a
-  --       pure (App t u i, b (eval (cxt^.vals) u))
-  --     VNe (HMeta m) sp -> do
-  --       a    <- eval (cxt^.vals) <$> freshMeta cxt VU
-  --       cod  <- freshMeta (bind "x" NOInserted a cxt) VU
-  --       let b ~x = eval (VDef (cxt^.vals) x) cod
-  --       unifyWhile cxt (VNe (HMeta m) sp) (VPi "x" i a b)
-  --       u <- check cxt u a
-  --       pure (App t u i, b (eval (cxt^.vals) u))
-  --     _ ->
-  --       report (cxt^.names) $ ExpectedFunction (quote (cxt^.len) va)
+      VPi x i' a b -> do
+        unless (i == i') $
+          report (cxt^.names) $ IcitMismatch i i'
+        u <- check cxt u a s
+        pure (App t u i, b (eval (cxt^.vals) u), s)
+      VNe (HMeta m) sp -> do
+        a    <- eval (cxt^.vals) <$> freshMeta cxt (VU s)
+        cod  <- freshMeta (bind "x" NOInserted a s cxt) (VU s)
+        let b ~x = eval (VDef (cxt^.vals) x) cod
+        unifyWhile cxt (VNe (HMeta m) sp) (VPi "x" i a b) s
+        u <- check cxt u a s
+        pure (App t u i, b (eval (cxt^.vals) u), s)
+      _ ->
+        report (cxt^.names) $ ExpectedFunction (quote (cxt^.len) va)
 
   RLam x ann i t -> do
-    a <- case ann of
-      Just ann -> check cxt ann VU
-      Nothing  -> freshMeta cxt VU
+    traceM "laminfer"
+    (a, s) <- case ann of
+      Just ann -> inferU cxt ann
+      Nothing  -> do
+        s <- freshStage
+        m <- freshMeta cxt (VU s)
+        pure (m, s)
     let ~va = eval (cxt^.vals) a
-    let cxt' = bind x NOSource va cxt
-    (t, liftVal cxt -> b) <- insert cxt' $ infer cxt' t
-    pure (Lam x i a t, VPi x i va b)
+    let cxt' = bind x NOSource va s cxt
+    (t, liftVal cxt -> !b, s') <- insert cxt' $ infer cxt' t
+    unifyStage s s'
+    pure (Lam x i a t, VPi x i va b, s)
 
   RHole -> do
-    a <- freshMeta cxt VU
+    s <- freshStage
+    a <- freshMeta cxt (VU s)
     let ~va = eval (cxt^.vals) a
     t <- freshMeta cxt va
-    pure (t, va)
+    pure (t, va, s)
 
   RLet x a t u -> do
-    a <- check cxt a VU
+    (a, s) <- inferU cxt a
     let ~va = eval (cxt^.vals) a
-    t <- check cxt t va
+    t <- check cxt t va s
     let ~vt = eval (cxt^.vals) t
-    (u, b) <- infer (define x va vt cxt) u
-    pure (Let x a t u, b)
+    (u, b, s') <- infer (define x va s vt cxt) u
+    pure (Let x a s t u, b, s')
+
+  RCode a -> do
+    (a, vSSuc -> !s) <- inferU cxt a
+    pure (Code a, VU s, s)
+
+  RUp t -> do
+    (t, a, vSSuc -> !s) <- infer cxt t
+    pure (Up t, VCode a, s)
+
+  RDown t -> do
+    s <- freshStage
+    a <- eval (cxt^.vals) <$> freshMeta cxt (VU s)
+    (t, a', s') <- infer cxt t
+    unifyStage s' (vSSuc s)
+    unifyWhile cxt a' (VCode a) s'
+    pure (Down t, a, s)

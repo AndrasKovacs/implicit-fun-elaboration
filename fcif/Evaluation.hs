@@ -92,28 +92,60 @@ vAppSp h = go where
   go (SProj1 sp)      = vProj1 (go sp)
   go (SProj2 sp)      = vProj2 (go sp)
 
+vSSuc :: StageExp -> StageExp
+vSSuc s = case vStage s of
+  SLit s -> SLit (s + 1)
+  e      -> SSuc e
+
+vStage :: StageExp -> StageExp
+vStage = \case
+  SVar x -> case runLookupStageVar x of
+              Nothing -> SVar x
+              Just s  -> vStage s
+  SSuc e -> vSSuc (vStage e)
+  SLit s -> SLit s
+
+vPred :: StageExp -> StageExp
+vPred s = case vStage s of
+  SSuc e         -> e
+  SLit s | s > 0 -> SLit (s - 1)
+  _              -> error "impossible"
+
+vUp :: Val -> Val
+vUp = \case
+  VDown t -> t
+  t       -> VUp t
+
+vDown :: Val -> Val
+vDown = \case
+  VUp t -> t
+  t     -> VDown t
+
 eval :: Vals -> Tm -> Val
 eval vs = go where
   go = \case
-    Var x        -> vVar x vs
-    Let x _ t u  -> goBind u (go t)
-    U            -> VU
-    Meta m       -> vMeta m
-    Pi x i a b   -> VPi x i (go a) (goBind b)
-    Lam x i a t  -> VLam x i (go a) (goBind t)
-    App t u i    -> vApp (go t) (go u) i
-    Tel          -> VTel
-    TEmpty       -> VTEmpty
-    TCons x a b  -> VTCons x (go a) (goBind b)
-    Rec a        -> VRec (go a)
-    Tempty       -> VTempty
-    Tcons t u    -> VTcons (go t) (go u)
-    Proj1 t      -> vProj1 (go t)
-    Proj2 t      -> vProj2 (go t)
-    PiTel x a b  -> vPiTel id x (go a) (goBind b)
-    AppTel a t u -> vAppTel (go a) (go t) (go u)
-    LamTel x a t -> vLamTel id x (go a) (goBind t)
-    Skip t       -> eval (VSkip vs) t
+    Var x         -> vVar x vs
+    Let x _ _ t u -> goBind u (go t)
+    U s           -> VU (vStage s)
+    Meta m        -> vMeta m
+    Pi x i a b    -> VPi x i (go a) (goBind b)
+    Lam x i a t   -> VLam x i (go a) (goBind t)
+    App t u i     -> vApp (go t) (go u) i
+    Tel s         -> VTel (vStage s)
+    TEmpty        -> VTEmpty
+    TCons x a b   -> VTCons x (go a) (goBind b)
+    Rec a         -> VRec (go a)
+    Tempty        -> VTempty
+    Tcons t u     -> VTcons (go t) (go u)
+    Proj1 t       -> vProj1 (go t)
+    Proj2 t       -> vProj2 (go t)
+    PiTel x a b   -> vPiTel id x (go a) (goBind b)
+    AppTel a t u  -> vAppTel (go a) (go t) (go u)
+    LamTel x a t  -> vLamTel id x (go a) (goBind t)
+    Skip t        -> eval (VSkip vs) t
+    Code a        -> VCode (go a)
+    Up t          -> vUp (go t)
+    Down t        -> vDown (go t)
 
   goBind t x = eval (VDef vs x) t
 
@@ -134,8 +166,8 @@ quote d = go where
 
     VLam x i a t  -> Lam x i (go a) (goBind t)
     VPi x i a b   -> Pi x i (go a) (goBind b)
-    VU            -> U
-    VTel          -> Tel
+    VU s          -> U (vStage s)
+    VTel s        -> Tel (vStage s)
     VRec a        -> Rec (go a)
     VTEmpty       -> TEmpty
     VTCons x a as -> TCons x (go a) (goBind as)
@@ -143,5 +175,8 @@ quote d = go where
     VTcons t u    -> Tcons (go t) (go u)
     VPiTel x a b  -> PiTel x (go a) (goBind b)
     VLamTel x a t -> LamTel x (go a) (goBind t)
+    VCode a       -> Code (go a)
+    VUp t         -> Up (go t)
+    VDown t       -> Down (go t)
 
   goBind t = quote (d + 1) (t (VVar d))

@@ -30,6 +30,7 @@ parens p = char '(' *> p <* char ')'
 braces p = char '{' *> p <* char '}'
 pArrow   = symbol "→" <|> symbol "->"
 pBind    = pIdent <|> symbol "_"
+decimal  = lexeme L.decimal
 
 keyword :: String -> Bool
 keyword x =
@@ -40,10 +41,15 @@ pIdent = try $ do
   x <- takeWhile1P Nothing isAlphaNum <* ws
   x <$ guard (not (keyword x))
 
+pU :: Parser Raw
+pU =
+  char 'U' *> ((RU . Just <$> decimal) <|> (pure (RU Nothing)))
+
 pAtom :: Parser Raw
 pAtom  =
       withPos (    (RVar  <$> pIdent)
-               <|> (RU    <$  char 'U')
+               <|> pU
+               <|> (char '<' *> (RUp <$> pTm) <* char '>')
                <|> (RHole <$  char '_'))
   <|> parens pTm
 
@@ -52,11 +58,20 @@ pArg =
       ((Impl,) <$> (char '{' *> pTm <* char '}'))
   <|> ((Expl,) <$> pAtom)
 
-pSpine :: Parser Raw
-pSpine = do
+pCode :: Parser Raw
+pCode = RCode <$> (char '^' *> pAtom)
+
+pDown :: Parser Raw
+pDown = RDown <$> (char '~' *> pAtom)
+
+pApps :: Parser Raw
+pApps = do
   h    <- pAtom
   args <- many pArg
   pure $ foldl' (\t (i, u) -> RApp t u i) h args
+
+pSpine :: Parser Raw
+pSpine = pCode <|> pDown <|> pApps
 
 pLamBinder :: Parser (Name, Maybe Raw, Icit)
 pLamBinder =

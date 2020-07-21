@@ -25,6 +25,8 @@ instance Show Icit where
   show Expl = "explicit"
   show Impl = "implicit"
 
+type Stage = Int
+
 icit :: Icit -> a -> a -> a
 icit Impl i e = i
 icit Expl i e = e
@@ -35,7 +37,12 @@ data Raw
   | RLam Name (Maybe Raw) Icit Raw   -- ^ λ x. t  or λ{x}. t with optional type annotation
                                      --   on x
   | RApp Raw Raw Icit                -- ^ t u  or  t {u}
-  | RU                               -- ^ U
+  | RU (Maybe Stage)                 -- ^ U  or  U i
+
+  | RCode Raw                        -- ^ (^A)
+  | RUp Raw                          -- ^ <t>
+  | RDown Raw                        -- ^ ~t
+
   | RPi Name Icit Raw Raw            -- ^ (x : A) → B  or  {x : A} → B
   | RLet Name Raw Raw Raw            -- ^ let x : A = t in u
   | RHole                            -- ^ _
@@ -58,9 +65,9 @@ data MetaEntry
   = Unsolved Blocking ~VTy
   | Solved Val
 
-  -- | Constancy (Γ, x : Rec A) B   + a list of blocking metas.
+  -- | Constancy (Γ, x : Rec A : U i) B   + a list of blocking metas.
   --   When B becomes constant, A is solved to ε
-  | Constancy Cxt VTy VTy BlockedBy
+  | Constancy Cxt VTy StageExp VTy BlockedBy
 
 
 -- | A partial mapping from levels to levels. Undefined domain represents
@@ -88,19 +95,20 @@ skipStr (Str c d r occ) = Str c (d + 1) r occ
 data Vals  = VNil | VDef Vals ~Val | VSkip Vals
 
 -- | Type environment.
-data Types = TNil | TDef Types ~VTy | TBound Types ~VTy
+data Types = TNil | TDef Types ~VTy StageExp | TBound Types ~VTy StageExp
 
-type Ix    = Int
-type Lvl   = Int
-type Ty    = Tm
-type VTy   = Val
-type MCxt  = IM.IntMap MetaEntry
+type Ix       = Int
+type Lvl      = Int
+type Ty       = Tm
+type VTy      = Val
+type MCxt     = IM.IntMap MetaEntry
+type StageCxt = IM.IntMap (Maybe StageExp)
 
 -- | Extending `Types` with any type.
-pattern TSnoc :: Types -> VTy -> Types
-pattern TSnoc as a <- ((\case TBound as a -> Just (as, a)
-                              TDef as a   -> Just (as, a)
-                              TNil        -> Nothing) -> Just (as, a))
+pattern TSnoc :: Types -> VTy -> StageExp -> Types
+pattern TSnoc as a s <- ((\case TBound as a s -> Just (as, a, s)
+                                TDef as a s   -> Just (as, a, s)
+                                TNil          -> Nothing) -> Just (as, a, s))
 
 lvlName :: [Name] -> Lvl -> Name
 lvlName ns x = ns !! (length ns - x - 1)
@@ -121,15 +129,26 @@ data Cxt = Cxt {
   cxtNameOrigin :: [NameOrigin],
   cxtLen        :: Int}
 
-data Tm
-  = Var Ix             -- ^ x
-  | Let Name Ty Tm Tm  -- ^ let x : A = t in u
+type StageId = Int
 
-  | Pi Name Icit Ty Ty  -- ^ (x : A) → B)  or  {x : A} → B
+data StageExp
+  = SVar StageId
+  | SSuc StageExp
+  | SLit Stage
+
+data Tm
+  = Var Ix                      -- ^ x
+  | Let Name Ty StageExp Tm Tm  -- ^ let x : A : U i = t in u
+
+  | Pi Name Icit Ty Ty  -- ^ (x : A : U i) → B)  or  {x : A : U i} → B
   | Lam Name Icit Ty Tm -- ^ λ(x : A).t  or  λ{x : A}.t
   | App Tm Tm Icit      -- ^ t u  or  t {u}
 
-  | Tel               -- ^ Tel
+  | Code Tm             -- ^ ^A
+  | Up Tm               -- ^ <t>
+  | Down Tm             -- ^ ~t
+
+  | Tel StageExp      -- ^ Tel
   | TEmpty            -- ^ ε
   | TCons Name Ty Ty  -- ^ (x : A) ▷ B
   | Rec Tm            -- ^ Rec A
@@ -144,7 +163,7 @@ data Tm
 
   | LamTel Name Ty Tm -- ^ λ{x : A⃗}.t
 
-  | U                 -- ^ U
+  | U StageExp        -- ^ U i
   | Meta MId          -- ^ α
 
   | Skip Tm           -- ^ explicit weakening (convenience feature for closing types)
@@ -172,9 +191,13 @@ data Val
 
   | VPi Name Icit ~VTy (VTy -> VTy)
   | VLam Name Icit ~VTy (Val -> Val)
-  | VU
+  | VU StageExp
 
-  | VTel
+  | VCode VTy
+  | VUp Val
+  | VDown Val
+
+  | VTel StageExp
   | VRec ~Val
   | VTEmpty
   | VTCons Name ~Val (Val -> Val)

@@ -31,6 +31,8 @@ data ElabError
   | NameNotInScope Name
   | ExpectedFunction Tm
   | IcitMismatch Icit Icit
+  | ExpectedType Tm
+  | StageError StageExp StageExp
 
 data Err = Err {
   errNames :: [Name],
@@ -93,6 +95,14 @@ showError ns = \case
     "Name not in scope: " ++ x
   ExpectedFunction ty ->
     "Expected a function type, instead inferred:\n\n  " ++ showTm ns ty
+  ExpectedType t ->
+    "Expected a type, instead inferred type:\n\n  " ++ showTm ns t
   IcitMismatch i i' -> printf (
     "Function icitness mismatch: expected %s, got %s.")
     (show i) (show i')
+  StageError s s' -> printf
+    ("Cannot unify stage\n\n" ++
+     "  %s\n\n" ++
+     "with\n\n" ++
+     "  %s\n")
+    (show s) (show s')
