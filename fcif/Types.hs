@@ -62,7 +62,7 @@ type Blocking  = IS.IntSet
 type BlockedBy = IS.IntSet
 
 data MetaEntry
-  = Unsolved Blocking ~VTy
+  = Unsolved Blocking ~VTy ~StageExp
   | Solved Val
 
   -- | Constancy (Γ, x : Rec A : U i) B   + a list of blocking metas.
@@ -174,6 +174,7 @@ data Spine
   | SAppTel ~Val Spine ~Val
   | SProj1 Spine
   | SProj2 Spine
+  | SDown Spine
 
 valsLen :: Vals -> Int
 valsLen = go 0 where
@@ -195,7 +196,6 @@ data Val
 
   | VCode VTy
   | VUp Val
-  | VDown Val
 
   | VTel StageExp
   | VRec ~Val

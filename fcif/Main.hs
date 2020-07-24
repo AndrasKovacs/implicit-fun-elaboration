@@ -71,9 +71,18 @@ main' mode src = mainWith (pure [mode]) ((,src) <$> parseString src)
 
 
 test1 = unlines [
-  "let id : {A : ^U} → ^(~A) → ^(~A) = λ x. x in",
-  "let Bool = (B : U) → B → B → B in",
-  "let true : Bool = λ _ t f. t in",
-  "let false : Bool = λ _ t f. f in",
-  "id <true>"
+  "let id   = λ {A : ^U}(x : ^(~A)). x in",
+  "let Bool = {B} → B → B → B in",
+  "let true  : Bool = λ t f. t in",
+  "let false : Bool = λ t f. f in",
+  "let and : ^Bool → ^Bool → ^Bool = λ x y. <λ t f. (~x) ((~y) t f) t> in",
+  "let List = λ A. {L} → (A → L → L) → L → L in",
+  "let nil : {A} → List A = λ c n. n in",
+  "let cons : {A} → A → List A → List A = λ a as c n. c a (as c n) in",
+  "let foo : List Bool = cons true (cons true nil) in",
+  "let foldr : {A B : ^U} → (^(~A) → ^(~B) → ^(~B)) → ^(~B) → ^(List (~A) → ~B)",
+  "    = λ {A}{B} f z. <λ as. as (λ a b. ~(f <a> <b>)) (~z)> in",
+  "let map : {A B : ^U} → (^(~A) → ^(~B)) → ^(List (~A) → List (~B))",
+  "    = λ {A}{B} f. <λ as c n. as (λ a. c (~(f <a>))) n> in",
+  "<map>"
   ]

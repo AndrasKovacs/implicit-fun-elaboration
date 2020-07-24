@@ -68,7 +68,7 @@ vPiTel k x a b = case force a of
 
 vLamTel :: (Val -> Val) -> Name -> VTy -> (Val -> Val) -> Val
 vLamTel k x a t = case force a of
-  VTEmpty       -> k (t VTEmpty)
+  VTEmpty       -> k (t VTempty)
   VTCons _ a as -> let x1 = x ++ "1"
                        x2 = x ++ "2"
                    in VLam x1 Impl a $ \ ~x1 ->
@@ -91,6 +91,7 @@ vAppSp h = go where
   go (SAppTel a sp u) = vAppTel a (go sp) u
   go (SProj1 sp)      = vProj1 (go sp)
   go (SProj2 sp)      = vProj2 (go sp)
+  go (SDown sp)       = vDown (go sp)
 
 vSSuc :: StageExp -> StageExp
 vSSuc s = case vStage s of
@@ -113,13 +114,14 @@ vPred s = case vStage s of
 
 vUp :: Val -> Val
 vUp = \case
-  VDown t -> t
-  t       -> VUp t
+  VNe h (SDown sp) -> VNe h sp
+  t                -> VUp t
 
 vDown :: Val -> Val
 vDown = \case
-  VUp t -> t
-  t     -> VDown t
+  VUp t    -> t
+  VNe h sp -> VNe h (SDown sp)
+  _        -> error "impossible"
 
 eval :: Vals -> Tm -> Val
 eval vs = go where
@@ -162,6 +164,7 @@ quote d = go where
           goSp (SAppTel a sp u) = AppTel (go a) (goSp sp) (go u)
           goSp (SProj1 sp)      = Proj1 (goSp sp)
           goSp (SProj2 sp)      = Proj2 (goSp sp)
+          goSp (SDown sp)       = Down (goSp sp)
       in goSp (forceSp sp)
 
     VLam x i a t  -> Lam x i (go a) (goBind t)
@@ -177,6 +180,5 @@ quote d = go where
     VLamTel x a t -> LamTel x (go a) (goBind t)
     VCode a       -> Code (go a)
     VUp t         -> Up (go t)
-    VDown t       -> Down (go t)
 
   goBind t = quote (d + 1) (t (VVar d))

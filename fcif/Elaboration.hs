@@ -1,3 +1,4 @@
+{-# options_ghc -Wno-unused-imports #-}
 
 module Elaboration where
 
@@ -13,8 +14,6 @@ import Types
 import Evaluation
 import ElabState
 import Errors
-
-import Pretty
 
 import Debug.Trace
 
@@ -80,6 +79,7 @@ occurs d topX = occurs' d mempty where
       SAppTel a sp u -> go a <> goSp ms sp <> go u
       SProj1 sp      -> goSp ms sp
       SProj2 sp      -> goSp ms sp
+      SDown sp       -> goSp ms sp
 
     goBind t =
       occurs' (d + 1) ms (t (VVar d))
@@ -102,7 +102,6 @@ occurs d topX = occurs' d mempty where
 
       VCode a       -> go a
       VUp t         -> go t
-      VDown t       -> go t
 
 -- | Attempt to solve a constancy constraint.
 tryConstancy :: MId -> IO ()
@@ -112,9 +111,9 @@ tryConstancy constM = lookupMeta constM >>= \case
     -- clear blockers
     forM_ (IS.toList blockers) $ \m -> do
       modifyMeta m $ \case
-        Unsolved ms a -> Unsolved (IS.delete constM ms) a
-        Solved t      -> Solved t
-        Constancy{}   -> error "impossible"
+        Unsolved ms a s -> Unsolved (IS.delete constM ms) a s
+        Solved t        -> Solved t
+        Constancy{}     -> error "impossible"
 
     let dropConstancy = alterMeta constM (const Nothing)
 
@@ -125,8 +124,8 @@ tryConstancy constM = lookupMeta constM >>= \case
         -- set new blockers
         forM_ (IS.toList ms) $ \m ->
           modifyMeta m $ \case
-            Unsolved ms a -> Unsolved (IS.insert constM ms) a
-            _             -> error "impossible"
+            Unsolved ms a s -> Unsolved (IS.insert constM ms) a s
+            _               -> error "impossible"
 
         writeMeta constM $ Constancy cxt dom s cod ms
 
@@ -162,6 +161,7 @@ checkSp = (over _3 reverse <$>) . go . forceSp where
         _    -> throwIO SpineNonVar
     SProj1 _ -> throwIO SpineProjection
     SProj2 _ -> throwIO SpineProjection
+    SDown _  -> throwIO SpineProjection
 
 -- | Close a type in a cxt by wrapping it in Pi types and explicit weakenings.
 closingTy :: Cxt -> Ty -> Ty
@@ -188,6 +188,37 @@ closingTm = go 0 where
       LamTel x (quote d a) $ go (d + 1) (b (VVar d), len-1, drop 1 xs) rhs
     _            -> error "impossible"
 
+-- | Eta expand an unsolved meta. This causes all projections to disappear from
+--   meta spines. An expansion is modulo the current metacontext; other meta
+--   solutions may cause the type of a meta to accrue more negative types, and
+--   may require re-expansion.
+etaExpandMeta :: MId -> IO ()
+etaExpandMeta m = do
+  (a, s) <- lookupMeta m >>= \case
+    Unsolved _ a s -> pure (a, s)
+    _              -> error "impossible"
+
+  let go :: Cxt -> VTy -> StageExp -> IO Tm
+      go cxt a s = case force a of
+        VPi x i a b ->
+          Lam x i (quote (cxt^.len) a) <$> go (bindSrc x a s cxt) (b (VVar (cxt^.len))) s
+        VPiTel x a b ->
+          LamTel x (quote (cxt^.len) a) <$> go (bindSrc x a s cxt) (b (VVar (cxt^.len))) s
+        VRec VTEmpty ->
+          pure Tempty
+        VRec (VTCons x a b) -> do
+          t <- go cxt a s
+          u <- go cxt (b (eval (cxt^.vals) t)) s
+          pure (Tcons t u)
+        VCode a ->
+          Up <$> go cxt a (vPred s)
+        a ->
+          freshMeta cxt a s
+
+  t <- go emptyCxt a s
+  unifyWhile emptyCxt (VNe (HMeta m) SNil) (eval VNil t) s
+
+
 -- | Strengthens a value, returns a quoted normal result. This performs scope
 --   checking, meta occurs checking and (recursive) pruning at the same time.
 --   May throw `StrengtheningError`.
@@ -211,9 +242,9 @@ strengthen str = go where
       Just pruning | and pruning -> pure ()  -- no pruneable vars
       Just pruning               -> do
 
-        metaTy <- lookupMeta m >>= \case
-          Unsolved _ a -> pure a
-          _            -> error "impossible"
+        (metaTy, metaS) <- lookupMeta m >>= \case
+          Unsolved _ a s -> pure (a, s)
+          _              -> error "impossible"
 
         -- note: this can cause recursive pruning of metas in types
         (prunedTy :: Ty) <- do
@@ -231,7 +262,7 @@ strengthen str = go where
 
           go pruning (Str 0 0 mempty Nothing) metaTy
 
-        m' <- newMeta $ Unsolved mempty (eval VNil prunedTy)
+        m' <- newMeta $ Unsolved mempty (eval VNil prunedTy) metaS
 
         let argNum = length pruning
             body = go pruning metaTy (Meta m') 0 where
@@ -274,7 +305,6 @@ strengthen str = go where
     VLamTel x a t    -> LamTel x <$> go a <*> goBind t
     VCode a          -> Code <$> go a
     VUp t            -> Up <$> go t
-    VDown t          -> Down <$> go t
 
   goBind t = strengthen (liftStr str) (t (VVar (str^.cod)))
 
@@ -284,33 +314,38 @@ strengthen str = go where
     SAppTel a sp u -> AppTel <$> go a <*> goSp h sp <*> go u
     SProj1 sp      -> Proj1 <$> goSp h sp
     SProj2 sp      -> Proj2 <$> goSp h sp
+    SDown sp       -> Down <$> goSp h sp
 
 -- | May throw `UnifyError`.
-solveMeta :: Cxt -> MId -> Spine -> Val -> IO ()
-solveMeta cxt m sp rhs = do
+solveMeta :: Cxt -> MId -> Spine -> Val -> StageExp -> IO ()
+solveMeta cxt m sp rhs s = do
 
   -- these normal forms are only used in error reporting
   let ~topLhs = quote (cxt^.len) (VNe (HMeta m) sp)
       ~topRhs = quote (cxt^.len) rhs
 
-  -- check spine
-  (ren, spLen, spVars) <- checkSp sp
-         `catch` (throwIO . SpineError (cxt^.names) topLhs topRhs)
+  try (checkSp sp) >>= \case
+    Left SpineProjection -> do
+      etaExpandMeta m
+      unify cxt (VNe (HMeta m) sp) rhs s
+    Left e ->
+      throwIO $ SpineError (cxt^.names) topLhs topRhs e
+    Right (ren, spLen, spVars) -> do
 
-  --  strengthen right hand side
-  rhs <- strengthen (Str spLen (cxt^.len) ren (Just m)) rhs
-         `catch` (throwIO . StrengtheningError (cxt^.names) topLhs topRhs)
+      --  strengthen right hand side
+      rhs <- strengthen (Str spLen (cxt^.len) ren (Just m)) rhs
+             `catch` (throwIO . StrengtheningError (cxt^.names) topLhs topRhs)
 
-  (blocked, metaTy) <- lookupMeta m >>= \case
-    Unsolved blocked a -> pure (blocked, a)
-    _                  -> error "impossible"
+      (blocked, metaTy) <- lookupMeta m >>= \case
+        Unsolved blocked a _ -> pure (blocked, a)
+        _                    -> error "impossible"
 
-  let spVarNames = map (lvlName (cxt^.names)) spVars
-  let closedRhs = closingTm (metaTy, spLen, spVarNames) rhs
-  writeMeta m (Solved (eval VNil closedRhs))
+      let spVarNames = map (lvlName (cxt^.names)) spVars
+      let closedRhs = closingTm (metaTy, spLen, spVarNames) rhs
+      writeMeta m (Solved (eval VNil closedRhs))
 
-  -- try solving unblocked constraints
-  forM_ (IS.toList blocked) tryConstancy
+      -- try solving unblocked constraints
+      forM_ (IS.toList blocked) tryConstancy
 
 -- | Create a fresh stage metavariable.
 freshStage :: IO StageExp
@@ -318,10 +353,10 @@ freshStage = SVar <$> newStageVar Nothing
 
 -- | Create a fresh meta with given type, return
 --   the meta applied to all bound variables.
-freshMeta :: Cxt -> VTy -> IO Tm
-freshMeta cxt (quote (cxt^.len) -> a) = do
+freshMeta :: Cxt -> VTy -> StageExp -> IO Tm
+freshMeta cxt (quote (cxt^.len) -> a) topS = do
   let metaTy = closingTy cxt a
-  m <- newMeta $ Unsolved mempty (eval VNil metaTy)
+  m <- newMeta $ Unsolved mempty (eval VNil metaTy) topS
 
   let vars :: Types -> (Spine, Lvl)
       vars TNil                                   = (SNil, 0)
@@ -367,8 +402,8 @@ unify cxt l r topS = go l r where
   -- if both sides are meta-headed, we simply try to check both spines
   flexFlex m sp m' sp' = do
     try @SpineError (checkSp sp) >>= \case
-      Left{}  -> solveMeta cxt m' sp' (VNe (HMeta m) sp)
-      Right{} -> solveMeta cxt m sp (VNe (HMeta m') sp')
+      Left{}  -> solveMeta cxt m' sp' (VNe (HMeta m) sp) topS
+      Right{} -> solveMeta cxt m sp (VNe (HMeta m') sp') topS
 
   implArity :: Cxt -> (Val -> Val) -> Int
   implArity cxt b = go 0 (cxt^.len + 1) (b (VVar (cxt^.len))) where
@@ -398,18 +433,15 @@ unify cxt l r topS = go l r where
 
     (VCode a, VCode a')                      -> unify cxt a a' (vPred topS)
     (VUp t, VUp t')                          -> unify cxt t t' (vPred topS)
-    (VUp t, t')                              -> unify cxt t (vDown t') (vPred topS)
-    (t, VUp t')                              -> unify cxt (vDown t) t' (vPred topS)
-    (VDown t, VDown t')                      -> unify cxt t t' (vSSuc topS)
 
     (VNe h sp, VNe h' sp') | h == h'         -> goSp (forceSp sp) (forceSp sp')
     (VNe (HMeta m) sp, VNe (HMeta m') sp')   -> flexFlex m sp m' sp'
-    (VNe (HMeta m) sp, t')                   -> solveMeta cxt m sp t'
-    (t, VNe (HMeta m') sp')                  -> solveMeta cxt m' sp' t
+    (VNe (HMeta m) sp, t')                   -> solveMeta cxt m sp t' topS
+    (t, VNe (HMeta m') sp')                  -> solveMeta cxt m' sp' t topS
 
     (VPiTel x a b, VPi x' Impl a' b') | implArity cxt b < implArity cxt b' + 1 -> do
       let cxt' = bindSrc x' a' topS cxt
-      m <- freshMeta cxt' (VTel topS)
+      m <- freshMeta cxt' (VTel topS) topS
       let vm = eval (cxt'^.vals) m
       go a (VTCons x' a' (liftVal cxt vm))
       let b2 ~x1 ~x2 = b (VTcons x1 x2)
@@ -418,7 +450,7 @@ unify cxt l r topS = go l r where
 
     (VPi x' Impl a' b', VPiTel x a b) | implArity cxt b < implArity cxt b' + 1 -> do
       let cxt' = bindSrc x' a' topS cxt
-      m <- freshMeta cxt' (VTel topS)
+      m <- freshMeta cxt' (VTel topS) topS
       let vm = eval (cxt'^.vals) m
       go a (VTCons x' a' (liftVal cxt vm))
       let b2 ~x1 ~x2 = b (VTcons x1 x2)
@@ -437,6 +469,9 @@ unify cxt l r topS = go l r where
     (SNil, SNil)                            -> pure ()
     (SApp sp u i, SApp sp' u' i') | i == i' -> goSp sp sp' >> go u u'
     (SAppTel _ sp u, SAppTel _ sp' u')      -> goSp sp sp' >> go u u'
+    (SDown sp, SDown sp')                   -> goSp sp sp'
+    (SProj1 sp, SProj1 sp')                 -> goSp sp sp'
+    (SProj2 sp, SProj2 sp')                 -> goSp sp sp'
     _                                       -> error "impossible"
 
 
@@ -449,7 +484,7 @@ insert' cxt act = do
   (t, va, s) <- act
   let go t va = case force va of
         VPi x Impl a b -> do
-          m <- freshMeta cxt a
+          m <- freshMeta cxt a s
           let mv = eval (cxt^.vals) m
           go (App t m Impl) (b mv)
         va -> pure (t, va, s)
@@ -494,7 +529,7 @@ check cxt topT ~topA topS = case (topT, force topA) of
   -- inserting a new curried function lambda
   (t, VNe (HMeta _) _) -> do
     x <- ("Γ"++) . show <$> readIORef nextMId
-    dom <- freshMeta cxt (VTel topS)
+    dom <- freshMeta cxt (VTel topS) topS
     let vdom = eval (cxt^.vals) dom
     let cxt' = bind x NOInserted (VRec vdom) topS cxt
     (t, (liftVal cxt -> a), s) <- insert cxt' $ infer cxt' t
@@ -518,7 +553,7 @@ check cxt topT ~topA topS = case (topT, force topA) of
     pure $ Let x a s t u
 
   (RHole, topA) -> do
-    freshMeta cxt topA
+    freshMeta cxt topA topS
 
   (t, topA) -> do
     (t, va, s) <- insert cxt $ infer cxt t
@@ -532,18 +567,14 @@ check cxt topT ~topA topS = case (topT, force topA) of
 inferTopLams :: Cxt -> Raw -> IO (Tm, VTy, StageExp)
 inferTopLams cxt = \case
   RLam x ann i t -> do
-    traceM "inferlam"
     (a, s) <- case ann of
       Just ann -> inferU cxt ann
       Nothing  -> do
         s <- freshStage
-        m <- freshMeta cxt (VU s)
+        m <- freshMeta cxt (VU s) s
         pure (m, s)
-    traceShowM (a, s)
     let ~va = eval (cxt^.vals) a
     (t, liftVal cxt -> b, s') <- inferTopLams (bind ('*':x) NOSource va s cxt) t
-    traceM (showTm (('*':x) : (cxt^.names)) t)
-    traceShowM s'
     unifyStage s s'
     pure (Lam x i a t, VPi x i va b, s')
   RSrcPos p t ->
@@ -583,8 +614,8 @@ infer cxt = \case
         u <- check cxt u a s
         pure (App t u i, b (eval (cxt^.vals) u), s)
       VNe (HMeta m) sp -> do
-        a    <- eval (cxt^.vals) <$> freshMeta cxt (VU s)
-        cod  <- freshMeta (bind "x" NOInserted a s cxt) (VU s)
+        a    <- eval (cxt^.vals) <$> freshMeta cxt (VU s) s
+        cod  <- freshMeta (bind "x" NOInserted a s cxt) (VU s) s
         let b ~x = eval (VDef (cxt^.vals) x) cod
         unifyWhile cxt (VNe (HMeta m) sp) (VPi "x" i a b) s
         u <- check cxt u a s
@@ -593,12 +624,11 @@ infer cxt = \case
         report (cxt^.names) $ ExpectedFunction (quote (cxt^.len) va)
 
   RLam x ann i t -> do
-    traceM "laminfer"
     (a, s) <- case ann of
       Just ann -> inferU cxt ann
       Nothing  -> do
         s <- freshStage
-        m <- freshMeta cxt (VU s)
+        m <- freshMeta cxt (VU s) s
         pure (m, s)
     let ~va = eval (cxt^.vals) a
     let cxt' = bind x NOSource va s cxt
@@ -608,9 +638,9 @@ infer cxt = \case
 
   RHole -> do
     s <- freshStage
-    a <- freshMeta cxt (VU s)
+    a <- freshMeta cxt (VU s) s
     let ~va = eval (cxt^.vals) a
-    t <- freshMeta cxt va
+    t <- freshMeta cxt va s
     pure (t, va, s)
 
   RLet x a t u -> do
@@ -631,7 +661,7 @@ infer cxt = \case
 
   RDown t -> do
     s <- freshStage
-    a <- eval (cxt^.vals) <$> freshMeta cxt (VU s)
+    a <- eval (cxt^.vals) <$> freshMeta cxt (VU s) s
     (t, a', s') <- infer cxt t
     unifyStage s' (vSSuc s)
     unifyWhile cxt a' (VCode a) s'
