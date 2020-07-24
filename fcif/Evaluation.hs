@@ -68,7 +68,7 @@ vPiTel k x a b = case force a of
 
 vLamTel :: (Val -> Val) -> Name -> VTy -> (Val -> Val) -> Val
 vLamTel k x a t = case force a of
-  VTEmpty       -> k (t VTEmpty)
+  VTEmpty       -> k (t VTempty)
   VTCons _ a as -> let x1 = x ++ "1"
                        x2 = x ++ "2"
                    in VLam x1 Impl a $ \ ~x1 ->
