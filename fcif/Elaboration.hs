@@ -375,9 +375,14 @@ unifyWhile cxt l r s =
   `catch`
   (report (cxt^.names) . UnifyErrorWhile (quote (cxt^.len) l) (quote (cxt^.len) r))
 
-
+-- occurs check!
 solveStage :: StageId -> StageExp -> IO ()
-solveStage x s =
+solveStage x s = do
+  let occurs = \case
+        SVar x' -> when (x == x') $ report [] $ StageError (SLit x) s
+        SSuc s  -> occurs s
+        SLit _  -> pure ()
+  occurs s
   modifyStageVar x $ maybe (Just s) (error "impossible")
 
 unifyStage :: StageExp -> StageExp -> IO ()
