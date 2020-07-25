@@ -8,7 +8,7 @@ import Types
 -- | Wrap in parens if expression precedence is lower than
 --   enclosing expression precedence.
 par :: Int -> Int -> ShowS -> ShowS
-par p p' = showParen (p < p')
+par p p' = showParen (p' < p)
 
 -- Precedences
 atomp = 3  -- identifiers, U, ε, Tel
@@ -17,9 +17,16 @@ recp  = 1  -- _∷_ : assocs to right
 tmp   = 0  -- lam, let, Pi, PiTel, _▷_ : assocs to right
 
 fresh :: [Name] -> Name -> Name
-fresh _ "_" = "_"
-fresh ns n | elem n ns = fresh ns (n++"'")
-           | otherwise = n
+fresh ns "_" = "_"
+fresh ns x | elem x ns = go (1 :: Int) where
+  go n | elem (x ++ show n) ns = go (n + 1)
+       | otherwise             = x ++ show n
+fresh ns x = x
+
+-- fresh :: [Name] -> Name -> Name
+-- fresh _ "_" = "_"
+-- fresh ns n | elem n ns = fresh ns (n++"'")
+--            | otherwise = n
 
 bracket :: ShowS -> ShowS
 bracket s = ('{':).s.('}':)
@@ -75,74 +82,80 @@ instance Show StageExp where
   show s = stage s []
 
 tm :: Int -> [Name] -> Tm -> ShowS
-tm p ns = \case
-  Var x  -> case ns !! x of
-    '*':n -> (n++)
-    "_"   -> ("@"++).(show x++)
-    n     -> (n++)
-  Meta m ->
-    ("?"++).(show m++)
-  Let (fresh ns -> x) a _ t u ->
-    par tmp p $
-      ("let "++).(x++).(" : "++). tm tmp ns a . ("\n    = "++)
-      . tm tmp ns t . ("\nin\n"++) . tm tmp (x:ns) u
-  t@App{} ->
-    par appp p $ fst $ spine ns t
-  t@AppTel{} ->
-    par appp p $ fst $ spine ns t
-  Lam x i a t ->
-    par tmp p $ ("λ "++) . lamBind x i . lams (x:ns) t
+tm p ns = go p where
 
-  Pi "_" Expl a b ->
-    par tmp p $ tm recp ns a . (" → "++) . tm tmp ("_":ns) b
-  Pi (fresh ns -> x) i a b ->
-    par tmp p $ piBind ns x i a . pi (x:ns) b
+  go :: Int -> Ty -> [Char] -> [Char]
+  go p = \case
+    Var x  -> case ns !! x of
+      '*':n -> (n++)
+      "_"   -> ("@"++).(show x++)
+      n     -> (n++)
+    Meta m ->
+      ("?"++).(show m++)
+    Let (fresh ns -> x) a _ t u ->
+      par p tmp $
+        ("let "++).(x++).(" : "++). go tmp a . (" = "++)
+        . go tmp t . (" in "++) . tm tmp (x:ns) u
+    t@App{} ->
+      par p appp $ fst $ spine ns t
+    t@AppTel{} ->
+      par p appp $ fst $ spine ns t
+    Lam x i a t ->
+      par p tmp $ ("λ "++) . lamBind x i . lams (x:ns) t
 
-  U s    -> par appp p (("U "++) . stage s)
-  Tel s  -> par appp p (("Tel "++) . stage s)
-  TEmpty -> ("ε"++)
+    Pi "_" Expl a b ->
+      par p tmp $ go recp a . (" → "++) . tm tmp ("_":ns) b
+    Pi (fresh ns -> x) i a b ->
+      par p tmp $ piBind ns x i a . pi (x:ns) b
 
-  TCons "_" a as ->
-    par tmp p $ tm recp ns a . (" ▷ "++). tm tmp ns as
-  TCons (fresh ns -> x) a as ->
-    par tmp p $
-      showParen True ((x++) . (" : "++) . tm tmp ns a)
-      . (" ▷ "++). tm tmp (x:ns) as
+    U s    -> par p appp (("U "++) . stage s)
+    Tel s  -> par p appp (("Tel "++) . stage s)
+    TEmpty -> ("ε"++)
 
-  Tempty    -> ("[]"++)
-  Rec a     -> par appp p $ ("Rec "++) . tm atomp ns a
-  Tcons t u -> par recp p (tm appp ns t . (" ∷ "++). tm recp ns u)
-  Proj1 t   -> par appp p (("π₁ "++). tm atomp ns t)
-  Proj2 t   -> par appp p (("π₂ "++). tm atomp ns t)
+    TCons "_" a as ->
+      par p tmp $ go recp a . (" ▷ "++). go tmp as
+    TCons (fresh ns -> x) a as ->
+      par p tmp $
+        showParen True ((x++) . (" : "++) . go tmp a)
+        . (" ▷ "++). tm tmp (x:ns) as
 
-  PiTel "_" a b ->
-    par tmp p $ tm recp ns a . (" → "++) . tm tmp ("_":ns) b
-  PiTel (fresh ns -> x) a b ->
-    par tmp p $ piBind ns x Impl a . pi (x:ns) b
-  LamTel (fresh ns -> x) a t ->
-    par tmp p $ ("λ"++) . lamTelBind ns x a . lams (x:ns) t
+    Tempty    -> ("[]"++)
+    Rec a     -> par p appp $ ("Rec "++) . go atomp a
+    Tcons t u -> par p recp (go appp t . (" ∷ "++). go recp u)
+    Proj1 t   -> par p appp (("π₁ "++). go atomp t)
+    Proj2 t   -> par p appp (("π₂ "++). go atomp t)
 
-  Skip t -> tm p ("_":ns) t
+    PiTel "_" a b ->
+      par p tmp $ go recp a . (" → "++) . tm tmp ("_":ns) b
+    PiTel (fresh ns -> x) a b ->
+      par p tmp $ piBind ns x Impl a . pi (x:ns) b
+    LamTel (fresh ns -> x) a t ->
+      par p tmp $ ("λ"++) . lamTelBind ns x a . lams (x:ns) t
 
-  Code a -> par appp p $ ("^"++) . tm atomp ns a
-  Up t   -> ('<':).tm tmp ns t.('>':)
-  Down t -> par appp p $ ("~"++) . tm atomp ns t
+    Skip t -> tm p ("_":ns) t
+
+    Code a -> par p appp $ ("^"++) . go atomp a
+    Up t   -> ('<':).go tmp t.('>':)
+    Down t -> ('[':).go tmp t.(']':)
 
 -- | We specialcase printing of top lambdas, since they are usually used
 --   to postulate stuff. We use '*' in a somewhat hacky way to mark
 --   names bound in top lambdas, so that later we can avoid printing
 --   them in meta spines.
 showTopTm :: Tm -> String
-showTopTm t = topLams False "λ" "" [] t [] where
-  topLams :: Bool -> String -> String -> [Name] -> Tm -> ShowS
-  topLams p pre post ns (Lam (fresh ns -> x) i a t) =
-    showParen p (
+showTopTm t = top "λ" "" [] t [] where
+
+  top :: String -> String -> [Name] -> Tm -> ShowS
+  top pre post ns (Lam (fresh ns -> x) i a t) =
       (pre++)
     . icit i bracket (showParen True) (
            ((if null x then "_" else x)++) . (" : "++) . tm tmp ns a)
-    . topLams False "\n " ".\n\n" (('*':x):ns) t) -- note the '*'
-  topLams _ pre post ns t = (post++) . tm tmp ns t
-
+    . top "\n " ".\n\n" (('*':x):ns) t -- note the '*'
+  top pre post ns (Let (fresh ns -> x) a s t u) =
+      (post++)
+    . ("let "++).(x++).(" : "++). tm tmp ns a . ("\n    = "++)
+    . tm tmp ns t . ("\nin\n"++) . top "\nλ" "" (x:ns) u
+  top pre post ns t = (post++) . tm tmp ns t
 
 showTm ns t = tm tmp ns t []
 instance Show Tm where show = showTopTm

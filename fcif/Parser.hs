@@ -50,6 +50,7 @@ pAtom  =
       withPos (    (RVar  <$> pIdent)
                <|> pU
                <|> (char '<' *> (RUp <$> pTm) <* char '>')
+               <|> (char '[' *> (RDown <$> pTm) <* char ']')
                <|> (RHole <$  char '_'))
   <|> parens pTm
 
@@ -61,9 +62,6 @@ pArg =
 pCode :: Parser Raw
 pCode = RCode <$> (char '^' *> pAtom)
 
-pDown :: Parser Raw
-pDown = RDown <$> (char '~' *> pAtom)
-
 pApps :: Parser Raw
 pApps = do
   h    <- pAtom
@@ -71,7 +69,7 @@ pApps = do
   pure $ foldl' (\t (i, u) -> RApp t u i) h args
 
 pSpine :: Parser Raw
-pSpine = pCode <|> pDown <|> pApps
+pSpine = pCode <|> pApps
 
 pLamBinder :: Parser (Name, Maybe Raw, Icit)
 pLamBinder =
