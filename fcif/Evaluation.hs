@@ -149,7 +149,7 @@ eval vs = go where
     Up t          -> vUp (go t)
     Down t        -> vDown (go t)
 
-  goBind t x = eval (VDef vs x) t
+  goBind t ~v = eval (VDef vs v) t
 
 -- | Quote a beta-normal form from a `Val`.
 quote :: Lvl -> Val -> Tm

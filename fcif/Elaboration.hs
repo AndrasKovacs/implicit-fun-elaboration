@@ -580,7 +580,7 @@ inferTopLams cxt = \case
   RSrcPos p t ->
     addSrcPos p $ inferTopLams cxt t
 
-  t -> insert cxt $ infer cxt t
+  t -> infer cxt t
 
 infer :: Cxt -> Raw -> IO (Tm, VTy, StageExp)
 infer cxt = \case

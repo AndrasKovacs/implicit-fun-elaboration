@@ -143,8 +143,8 @@ showTopTm t = topLams False "λ" "" [] t [] where
     . topLams False "\n " ".\n\n" (('*':x):ns) t) -- note the '*'
   topLams _ pre post ns t = (post++) . tm tmp ns t
 
-showTm :: [Name] -> Tm -> String
+
 showTm ns t = tm tmp ns t []
+instance Show Tm where show = showTopTm
 -- showTm ns t = show t
 -- deriving instance Show Tm
-instance Show Tm where show = showTopTm
