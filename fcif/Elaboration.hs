@@ -14,6 +14,7 @@ import Types
 import Evaluation
 import ElabState
 import Errors
+import Pretty
 
 import Debug.Trace
 
@@ -163,14 +164,14 @@ checkSp = (over _3 reverse <$>) . go . forceSp where
     SProj2 _ -> throwIO SpineProjection
     SDown _  -> throwIO SpineProjection
 
--- | Close a type in a cxt by wrapping it in Pi types and explicit weakenings.
+-- | Close a type in a cxt by wrapping it in Pi types and explicit strengthenings.
 closingTy :: Cxt -> Ty -> Ty
 closingTy cxt = go (cxt^.types) (cxt^.names) (cxt^.len) where
-  go TNil                  []     d b = b
+  go TNil                    []     d b = b
   go (TDef tys a s)          (x:ns) d b = go tys ns (d-1) (Skip b)
   go (TBound tys (VRec a) _) (x:ns) d b = go tys ns (d-1) (PiTel x (quote (d-1) a) b)
   go (TBound tys a _)        (x:ns) d b = go tys ns (d-1) (Pi x Expl (quote (d-1) a) b)
-  go _                     _      _ _ = error "impossible"
+  go _                       _      _ _ = error "impossible"
 
 -- | Close a term by wrapping it in `Int` number of lambdas, while taking the domain
 --   types from the `VTy`, and the binder names from a list. If we run out of provided
@@ -379,23 +380,20 @@ unifyWhile cxt l r s =
 solveStage :: StageId -> StageExp -> IO ()
 solveStage x s = do
   let occurs = \case
-        SVar x' -> when (x == x') $ report [] $ StageError (SLit x) s
+        SVar x' -> when (x == x') $ report [] $ StageError (SVar x) s
         SSuc s  -> occurs s
-        SLit _  -> pure ()
+        SZero   -> pure ()
   occurs s
   modifyStageVar x $ maybe (Just s) (error "impossible")
 
 unifyStage :: StageExp -> StageExp -> IO ()
 unifyStage s s' = go (vStage s) (vStage s') where
   go (SVar x) (SVar x') | x == x' = pure ()
-  go (SSuc s) (SSuc s') = go s s'
-  go (SLit s) (SLit s') | s == s' = pure ()
-  go (SSuc s) (SLit s') | s' /= 0 = go s (SLit (s' - 1))
-  go (SLit s) (SSuc s') | s /= 0  = go (SLit (s - 1)) s'
-  go (SVar x) s' = solveStage x s'
-  go s (SVar x') = solveStage x' s
-  go s s' = report [] $ StageError s s'
-
+  go (SSuc s) (SSuc s')           = go s s'
+  go SZero    SZero               = pure ()
+  go (SVar x) s'                  = solveStage x s'
+  go s        (SVar x')           = solveStage x' s
+  go s        s'                  = report [] $ StageError s s'
 
 -- | May throw `UnifyError`.
 unify :: Cxt -> Val -> Val -> StageExp -> IO ()
@@ -508,6 +506,41 @@ inferU cxt t = do
   unifyWhile cxt a (VU s) s
   pure (t, s)
 
+coerce :: Cxt -> Tm -> VTy -> StageExp -> VTy -> StageExp -> IO Tm
+coerce cxt t a s a' s' = maybe t id <$> go cxt t a s a' s' where
+
+  go :: Cxt -> Tm -> VTy -> StageExp -> VTy -> StageExp -> IO (Maybe Tm)
+  go cxt t a s a' s' = case (force a, force a') of
+
+    (VCode a, VCode a') ->
+      (Up <$>) <$> go cxt (Down t) a (vPred s) a' (vPred s')
+
+    (VPi x i a b, VPi x' i' a' b') -> do
+      when (i /= i') $ report (cxt^.names) $ IcitMismatch i i'
+      let cxt' = bind x NOSource a' s' cxt
+      coev0 <- go cxt' (Var 0) a' s' a s
+      case coev0 of
+        Nothing -> do
+          body <- go cxt' (App (Wk t) (Var 0) i)
+                          (b (eval (cxt'^.vals) (Var 0))) s
+                          (b' (VVar (cxt^.len))) s'
+          pure $ Lam x i (quote (cxt^.len) a') <$> body
+        Just coev0 -> do
+          body <- go cxt' (App (Wk t) coev0 i)
+                          (b (eval (cxt'^.vals) coev0)) s
+                          (b' (VVar (cxt^.len))) s'
+          case body of
+            Nothing   -> pure $ Just $ Lam x i (quote (cxt^.len) a') (App (Wk t) coev0 i)
+            Just body -> pure $ Just $ Lam x i (quote (cxt^.len) a') body
+
+    (VCode a, a') -> Just <$> coerce cxt (Down t) a (vPred s) a' s'
+    (a, VCode a') -> Just . Up <$> coerce cxt t a s a' (vPred s')
+    (a, a')       -> do
+      traceShowM (s, s', showVal cxt a, showVal cxt a')
+      unifyStage s s'
+      unifyWhile cxt a a' s
+      pure Nothing
+
 checkU :: Cxt -> Raw -> StageExp -> IO Tm
 checkU cxt t s = check cxt t (VU s) s
 
@@ -531,23 +564,34 @@ check cxt topT ~topA topS = case (topT, force topA) of
     t <- check (bind x NOInserted a topS cxt) t (b (VVar (cxt^.len))) topS
     pure $ Lam x Impl (quote (cxt^.len) a) t
 
-  -- inserting a new curried function lambda
-  (t, VNe (HMeta _) _) -> do
-    x <- ("Γ"++) . show <$> readIORef nextMId
-    dom <- freshMeta cxt (VTel topS) topS
-    let vdom = eval (cxt^.vals) dom
-    let cxt' = bind x NOInserted (VRec vdom) topS cxt
-    (t, (liftVal cxt -> a), s) <- insert cxt' $ infer cxt' t
-    unifyStage s topS
-    newConstancy cxt vdom topS a
-    unifyWhile cxt topA (VPiTel x vdom a) topS
-    pure $ LamTel x dom t
+  -- -- inserting a new curried function lambda (TODO!)
+  -- (t, topA@(VNe (HMeta _) _)) -> do
+  --   x <- ("Γ"++) . show <$> readIORef nextMId
+  --   dom <- freshMeta cxt (VTel topS) topS
+  --   let vdom = eval (cxt^.vals) dom
+  --   let cxt' = bind x NOInserted (VRec vdom) topS cxt
+  --   (t, (liftVal cxt -> a), s) <- insert cxt' $ infer cxt' t
+  --   newConstancy cxt vdom topS a
+
+  --   unifyStage s topS
+  --   unifyWhile cxt topA (VPiTel x vdom a) topS
+
+  --   pure $ LamTel x dom t
+
+  (RCode a, VU (SSuc s)) -> do
+    Code <$> checkU cxt a s
+
+  (RPi x i a b, VU s) -> do
+    a <- checkU cxt a s
+    let ~va = eval (cxt^.vals) a
+    b <- checkU (bind x NOSource va s cxt) b s
+    pure $ Pi x i a b
 
   (RUp t, VCode a) -> do
     Up <$> check cxt t a (vPred topS)
 
   (RDown t, a) -> do
-    Down <$> check cxt t (VCode a) (vSSuc topS)
+    Down <$> check cxt t (VCode a) (SSuc topS)
 
   (RLet x a t u, topA) -> do
     (a, s) <- inferU cxt a
@@ -562,15 +606,26 @@ check cxt topT ~topA topS = case (topT, force topA) of
 
   (t, topA) -> do
     (t, va, s) <- insert cxt $ infer cxt t
-    unifyStage s topS
-    unifyWhile cxt va topA topS
+
+    -- traceM "coerce"
+    -- traceM $ showTm (cxt^.names) t
+    -- traceM $ showVal cxt va
+    -- traceM $ showVal cxt topA
+
+    t <- coerce cxt t va s topA topS
+
+    -- traceM (showTm (cxt^.names) t)
+
     pure t
+    -- unifyStage s topS
+    -- unifyWhile cxt va topA topS
+    -- pure t
 
 -- | We specialcase top-level lambdas (serving as postulates) for better
 --   printing: we don't print them in meta spines. We prefix the top
 --   lambda-bound names with '*'.
-inferTopLams :: Cxt -> Raw -> IO (Tm, VTy, StageExp)
-inferTopLams cxt = \case
+inferTop :: Cxt -> Raw -> IO (Tm, VTy, StageExp)
+inferTop cxt = \case
   RLam x ann i t -> do
     (a, s) <- case ann of
       Just ann -> inferU cxt ann
@@ -579,11 +634,11 @@ inferTopLams cxt = \case
         m <- freshMeta cxt (VU s) s
         pure (m, s)
     let ~va = eval (cxt^.vals) a
-    (t, liftVal cxt -> b, s') <- inferTopLams (bind ('*':x) NOSource va s cxt) t
+    (t, liftVal cxt -> !b, s') <- inferTop (bind ('*':x) NOSource va s cxt) t
     unifyStage s s'
     pure (Lam x i a t, VPi x i va b, s')
   RSrcPos p t ->
-    addSrcPos p $ inferTopLams cxt t
+    addSrcPos p $ inferTop cxt t
 
   t -> infer cxt t
 
@@ -592,7 +647,7 @@ infer cxt = \case
   RSrcPos p t -> addSrcPos p $ infer cxt t
 
   RU s -> do
-    s <- maybe freshStage (pure . SLit) s
+    s <- maybe freshStage (pure . sLit) s
     pure (U s, VU s, s)
 
   RVar x -> do
@@ -618,15 +673,22 @@ infer cxt = \case
           report (cxt^.names) $ IcitMismatch i i'
         u <- check cxt u a s
         pure (App t u i, b (eval (cxt^.vals) u), s)
-      VNe (HMeta m) sp -> do
-        a    <- eval (cxt^.vals) <$> freshMeta cxt (VU s) s
-        cod  <- freshMeta (bind "x" NOInserted a s cxt) (VU s) s
-        let b ~x = eval (VDef (cxt^.vals) x) cod
-        unifyWhile cxt (VNe (HMeta m) sp) (VPi "x" i a b) s
-        u <- check cxt u a s
-        pure (App t u i, b (eval (cxt^.vals) u), s)
-      _ ->
-        report (cxt^.names) $ ExpectedFunction (quote (cxt^.len) va)
+      va -> do
+        (u, dom, s') <- infer cxt u
+        cod <- freshMeta (bind "x" NOInserted dom s' cxt) (VU s') s'
+        let vcod ~x = eval (VDef (cxt^.vals) x) cod
+        t <- coerce cxt t va s (VPi "x" i dom vcod) s'
+        pure (App t u i, vcod (eval (cxt^.vals) u), s')
+
+      -- VNe (HMeta m) sp -> do
+      --   a    <- eval (cxt^.vals) <$> freshMeta cxt (VU s) s
+      --   cod  <- freshMeta (bind "x" NOInserted a s cxt) (VU s) s
+      --   let b ~x = eval (VDef (cxt^.vals) x) cod
+      --   unifyWhile cxt (VNe (HMeta m) sp) (VPi "x" i a b) s
+      --   u <- check cxt u a s
+      --   pure (App t u i, b (eval (cxt^.vals) u), s)
+      -- _ ->
+      --   report (cxt^.names) $ ExpectedFunction (quote (cxt^.len) va)
 
   RLam x ann i t -> do
     (a, s) <- case ann of
@@ -657,17 +719,17 @@ infer cxt = \case
     pure (Let x a s t u, b, s')
 
   RCode a -> do
-    (a, vSSuc -> !s) <- inferU cxt a
+    (a, SSuc -> !s) <- inferU cxt a
     pure (Code a, VU s, s)
 
   RUp t -> do
-    (t, a, vSSuc -> !s) <- infer cxt t
-    pure (Up t, VCode a, s)
+    (t, a, s) <- infer cxt t
+    pure (Up t, VCode a, SSuc s)
 
   RDown t -> do
     s <- freshStage
     a <- eval (cxt^.vals) <$> freshMeta cxt (VU s) s
     (t, a', s') <- infer cxt t
-    unifyStage s' (vSSuc s)
+    unifyStage s' (SSuc s)
     unifyWhile cxt a' (VCode a) s'
     pure (Down t, a, s)

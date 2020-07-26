@@ -47,12 +47,11 @@ mainWith getOpt getTm = do
       elab s' = do
         reset
         (t, src) <- getTm
-        (t, a, s) <- inferTopLams emptyCxt t `catch` displayError src
+        (t, a, s) <- inferTop emptyCxt t `catch` displayError src
         solveStagesTo0
-        s <- case vStage s of SLit s -> pure s
-                              _      -> error "impossible"
+        s <- pure $ sExp2Lit s
         t <- pure $ zonk VNil t
-        t <- pure $ stage s' s t
+        -- t <- pure $ stage s' s t
         let ~nt = quote 0 $ eval VNil t
         let ~na = quote 0 a
         pure (t, nt, na)
@@ -84,81 +83,87 @@ main = mainWith getArgs parseStdin
 main' :: [String] -> String -> IO ()
 main' args src = mainWith (pure args) ((,src) <$> parseString src)
 
-
 test1 = unlines [
-  "λ (Bool  : U 0)",
-  "  (true  : Bool)",
-  "  (false : Bool)",
-  "  (case  : {A} → Bool → A → A → A)",
-  "  (List  : U 0 → U 0)",
-  "  (nil   : {A} → List A)",
-  "  (cons  : {A} → A → List A → List A)",
-  "  (foldr : {A B} → (A → B → B) → B → List A → B)",
+  "let foo : _ = <U 0> in",
+  -- "λ (Bool  : U 0)",
+  -- "  (true  : Bool)",
+  -- "  (false : Bool)",
+  -- "  (case  : {A : U 0} → Bool → A → A → A)",
+  -- "  (List  : U 0 → U 0)",
+  -- "  (nil   : {A : U 0} → List A)",
+  -- "  (cons  : {A : U 0} → A → List A → List A)",
+  -- "  (foldr : {A B : U 0} → (A → B → B) → B → List A → B)",
 
-  "  (Nat₀  : U 0)",
-  "  (zero₀ : Nat₀)",
-  "  (suc₀  : Nat₀ → Nat₀)",
-  "  (rec₀  : {A} → A → (A → A) → Nat₀ → A)",
-  "  (mul₀  : Nat₀ → Nat₀ → Nat₀)",
-  "  (add₀  : Nat₀ → Nat₀ → Nat₀).",
+  -- "  (Nat₀  : U 0)",
+  -- "  (zero₀ : Nat₀)",
+  -- "  (suc₀  : Nat₀ → Nat₀)",
+  -- "  (rec₀  : {A : U 0} → A → (A → A) → Nat₀ → A)",
+  -- "  (mul₀  : Nat₀ → Nat₀ → Nat₀)",
+  -- "  (add₀  : Nat₀ → Nat₀ → Nat₀).",
 
-  "let Nat₁ : U 1 = (N : U 1) → N → (N → N) → N in",
-  "let zero₁ : Nat₁ = λ _ z s. z in",
-  "let suc₁ : Nat₁ → Nat₁ = λ a _ z s. s (a _ z s) in",
-  "let add₁ : Nat₁ → Nat₁ → Nat₁ = λ a b N z s. a N (b N z s) s in",
-  "let n₁5 : Nat₁ = λ _ z s. s (s (s (s (s z)))) in",
-  "let n₁10 = add₁ n₁5 n₁5 in",
+  -- "let Nat₁ : U 1 = (N : U 1) → N → (N → N) → N in",
+  -- "let zero₁ : Nat₁ = λ _ z s. z in",
+  -- "let suc₁ : Nat₁ → Nat₁ = λ a _ z s. s (a _ z s) in",
+  -- "let add₁ : Nat₁ → Nat₁ → Nat₁ = λ a b N z s. a N (b N z s) s in",
+  -- "let n₁5 : Nat₁ = λ _ z s. s (s (s (s (s z)))) in",
+  -- "let n₁10 = add₁ n₁5 n₁5 in",
 
-  "let n₀5 = suc₀ (suc₀ (suc₀ (suc₀ (suc₀ zero₀)))) in",
-  "let n₀10 = add₀ n₀5 n₀5 in",
+  -- "let n₀5 = suc₀ (suc₀ (suc₀ (suc₀ (suc₀ zero₀)))) in",
+  -- "let n₀10 = add₀ n₀5 n₀5 in",
 
-  "let List₁ : U 1 → U 1 = λ A. (L : U 1) → (A → L → L) → L → L in",
-  "let nil₁ : {A} → List₁ A = λ _ c n. n in",
-  "let cons₁ : {A} → A → List₁ A → List₁ A = λ a as L c n. c a (as L c n) in",
+  -- "let List₁ : U 1 → U 1 = λ A. (L : U 1) → (A → L → L) → L → L in",
+  -- "let nil₁ : {A} → List₁ A = λ _ c n. n in",
+  -- "let cons₁ : {A} → A → List₁ A → List₁ A = λ a as L c n. c a (as L c n) in",
 
-  "let Pair : U 1 -> U 1 -> U 1 = λ A B. (P : U 1) → (A → B → P) → P in",
-  "let pair : {A B} → A → B → Pair A B = λ a b P p. p a b in",
-  "let fst : {A B} → Pair A B → A = λ p. p _ (λ a b. a) in",
-  "let snd : {A B} → Pair A B → B = λ p. p _ (λ a b. b) in",
+  -- "let Pair : U 1 -> U 1 -> U 1 = λ A B. (P : U 1) → (A → B → P) → P in",
+  -- "let pair : {A B} → A → B → Pair A B = λ a b P p. p a b in",
+  -- "let fst : {A B} → Pair A B → A = λ p. p _ (λ a b. a) in",
+  -- "let snd : {A B} → Pair A B → B = λ p. p _ (λ a b. b) in",
 
-  "let inlCase : {A} → ^Bool → ^[A] → ^[A] → ^[A]",
-  "    = λ b t f. <case [b] [t] [f]> in",
+  -- "let inlCase : {A : ^U} → ^Bool → ^A → ^A → ^A",
+  -- "    = case in",
 
-  "let id : {A} → ^[A] → ^[A] = λ x. x in",
+  -- "let id : {A : ^U} → ^A → ^A = λ x. x in",
+  -- "let id₁ : {A : U 1} → A → A = λ x. x in",
 
-  "let test = [id <n₀10>] in",
-  "let test = λ b n. [inlCase <b> <add₀ n n₀10> <n>] in",
+  -- "let foo : _ = <U 0> in",
 
-  "let map : {A B } → (^[A] → ^[B]) → ^(List [A] → List [B])",
-  "    = λ {A}{B} f. <foldr (λ a bs. cons [f <a>] bs) nil> in",
+  -- "let test : Nat₀ = id n₀10 in",
+  -- "let test : Bool → Nat₀ → Nat₀ = λ b n. inlCase b (add₀ n n₀10) n in",
 
-  "let not : ^Bool → ^Bool = λ b. inlCase b <false> <true> in",
+  -- "let map : {A B : ^U} → (^A → ^B) → ^(List A → List B)",
+  -- "    = λ f. foldr (λ a. cons (f a)) nil in",
 
-  "let mapNot = [map not] in",
+  -- "let map2 : {A B : ^U} → ^(A → B) → ^(List A → List B)",
+  -- "    = λ f. foldr (λ a. cons (f a)) nil in",
 
-  "let exp₀ : Nat₀ → Nat₀ → Nat₀ = λ a b. rec₀ (suc₀ zero₀) (mul₀ b) a in",
+  -- "let not : ^Bool → ^Bool = λ b. case b false true in",
 
-  "let exp₁ : Nat₁ → ^Nat₀ → ^Nat₀",
-  "    = λ a b. a _ <suc₀ zero₀> (λ n. <mul₀ [b] [n]>) in",
+  -- "let mapNot : List Bool → List Bool = map not in",
 
-  "let exp5 = λ n. [exp₁ n₁5 <n>] in",
+  -- "let exp₀ : Nat₀ → Nat₀ → Nat₀ = λ a b. rec₀ (suc₀ zero₀) (mul₀ b) a in",
 
-  "let lower : Nat₁ → ^Nat₀ = λ n. n _ <zero₀> (λ x. <suc₀ [x]>) in",
 
-  -- "let upto : Nat₁ → List₁ Nat₁ = λ n.
-  -- "   n _ (λ n. cons₁ n nil₁)
 
-  "let expSum : List₁ (^Nat₀) → ^Nat₀",
-  "    = λ ns. ns (List₁ (^Nat₀) → ^Nat₀)",
-  "               (λ n hyp xs. <let x = [n] in [hyp (cons₁ <x> xs)]>)",
-  "               (λ xs. xs _ (λ n res. <add₀ [n] [res]>) <zero₀>)",
-  "               nil₁ in",
+  -- "let exp₁ : Nat₁ → ^Nat₀ → ^Nat₀",
+  -- "    = λ a b. a _ (suc₀ zero₀) (λ n. mul₀ n b) in",
 
-  "let test = [expSum (cons₁ <n₀5> (cons₁ <add₀ n₀5 n₀10> nil₁))] in",
+  -- -- "let exp5 = λ n. [exp₁ n₁5 <n>] in",
 
+  -- -- "let lower : Nat₁ → ^Nat₀ = λ n. n _ <zero₀> (λ x. <suc₀ [x]>) in",
+
+  -- -- -- "let upto : Nat₁ → List₁ Nat₁ = λ n.
+  -- -- -- "   n _ (λ n. cons₁ n nil₁)
+
+  -- -- "let expSum : List₁ (^Nat₀) → ^Nat₀",
+  -- -- "    = λ ns. ns (List₁ (^Nat₀) → ^Nat₀)",
+  -- -- "               (λ n hyp xs. <let x = [n] in [hyp (cons₁ <x> xs)]>)",
+  -- -- "               (λ xs. xs _ (λ n res. <add₀ [n] [res]>) <zero₀>)",
+  -- -- "               nil₁ in",
+
+  -- -- "let test = [expSum (cons₁ <n₀5> (cons₁ <add₀ n₀5 n₀10> nil₁))] in",
 
   "U 0"
-
   ]
 
 elabStage :: Int

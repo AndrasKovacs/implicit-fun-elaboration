@@ -52,6 +52,7 @@ zonk vs t = go t where
                        Right t -> AppTel (go a) t (go u)
     LamTel x a b  -> LamTel x (go a) (goBind b)
     Skip t        -> Skip (goBind t)
+    Wk t          -> Wk (zonk (valsTail vs) t)
 
     Code a        -> Code (go a)
     Up t          -> Up (go t)

@@ -1,9 +1,11 @@
 {-# options_ghc -Wno-orphans #-}
 
-module Pretty (showTm, showTopTm) where
+module Pretty (showTm, showTopTm, showVal) where
 
+import Lens.Micro.Platform
 import Prelude hiding (pi)
 import Types
+import Evaluation
 
 -- | Wrap in parens if expression precedence is lower than
 --   enclosing expression precedence.
@@ -76,7 +78,7 @@ stage :: StageExp -> ShowS
 stage = \case
   SVar x -> ('?':).(show x++)
   SSuc s -> showParen True (("Suc "++).stage s)
-  SLit s -> (show s++)
+  SZero  -> ("0"++)
 
 instance Show StageExp where
   show s = stage s []
@@ -132,7 +134,8 @@ tm p ns = go p where
     LamTel (fresh ns -> x) a t ->
       par p tmp $ ("λ"++) . lamTelBind ns x a . lams (x:ns) t
 
-    Skip t -> tm p ("_":ns) t
+    Skip t -> par p appp (("_skip_ "++).tm p ("_":ns) t)
+    Wk t   -> par p appp (("_wk_ "++).tm p (tail ns) t)
 
     Code a -> par p appp $ ("^"++) . go atomp a
     Up t   -> ('<':).go tmp t.('>':)
@@ -161,3 +164,6 @@ showTm ns t = tm tmp ns t []
 instance Show Tm where show = showTopTm
 -- showTm ns t = show t
 -- deriving instance Show Tm
+
+showVal :: Cxt -> Val -> String
+showVal cxt v = showTm (cxt^.names) (quote (cxt^.len) v)

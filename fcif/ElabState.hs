@@ -89,7 +89,7 @@ newStageVar e = do
 -- | Solve all ambiguous stages to 0.
 solveStagesTo0 :: IO ()
 solveStagesTo0 =
-  modifyIORef' stages $ IM.map (Just . maybe (SLit 0) id)
+  modifyIORef' stages $ IM.map (Just . maybe SZero id)
 
 --------------------------------------------------------------------------------
 

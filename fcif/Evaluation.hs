@@ -93,23 +93,23 @@ vAppSp h = go where
   go (SProj2 sp)      = vProj2 (go sp)
   go (SDown sp)       = vDown (go sp)
 
-vSSuc :: StageExp -> StageExp
-vSSuc s = case vStage s of
-  SLit s -> SLit (s + 1)
-  e      -> SSuc e
-
 vStage :: StageExp -> StageExp
 vStage = \case
   SVar x -> case runLookupStageVar x of
               Nothing -> SVar x
               Just s  -> vStage s
-  SSuc e -> vSSuc (vStage e)
-  SLit s -> SLit s
+  SSuc e -> SSuc (vStage e)
+  SZero  -> SZero
+
+sExp2Lit :: StageExp -> Stage
+sExp2Lit s = go 0 (vStage s) where
+  go acc SZero    = acc
+  go acc (SSuc s) = go (acc + 1) s
+  go _   _        = error "impossible"
 
 vPred :: StageExp -> StageExp
 vPred s = case vStage s of
   SSuc e         -> e
-  SLit s | s > 0 -> SLit (s - 1)
   _              -> error "impossible"
 
 vUp :: Val -> Val
@@ -122,6 +122,12 @@ vDown = \case
   VUp t    -> t
   VNe h sp -> VNe h (SDown sp)
   _        -> error "impossible"
+
+valsTail :: Vals -> Vals
+valsTail = \case
+  VDef vs _ -> vs
+  VSkip vs  -> vs
+  _         -> error "impossible"
 
 eval :: Vals -> Tm -> Val
 eval vs = go where
@@ -145,6 +151,7 @@ eval vs = go where
     AppTel a t u  -> vAppTel (go a) (go t) (go u)
     LamTel x a t  -> vLamTel id x (go a) (goBind t)
     Skip t        -> eval (VSkip vs) t
+    Wk t          -> eval (valsTail vs) t
     Code a        -> VCode (go a)
     Up t          -> vUp (go t)
     Down t        -> vDown (go t)

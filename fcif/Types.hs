@@ -134,7 +134,11 @@ type StageId = Int
 data StageExp
   = SVar StageId
   | SSuc StageExp
-  | SLit Stage
+  | SZero
+
+sLit :: Stage -> StageExp
+sLit 0 = SZero
+sLit s = SSuc (sLit (s - 1))
 
 data Tm
   = Var Ix                      -- ^ x
@@ -166,7 +170,8 @@ data Tm
   | U StageExp        -- ^ U i
   | Meta MId          -- ^ α
 
-  | Skip Tm           -- ^ explicit weakening (convenience feature for closing types)
+  | Skip Tm           -- ^ explicit strengthening (convenience feature for closing types)
+  | Wk Tm             -- ^ explicit weakening (convenience feature for ^ coercion)
 
 data Spine
   = SNil
