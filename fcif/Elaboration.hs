@@ -521,10 +521,7 @@ coerce cxt t a s a' s' = maybe t id <$> go cxt t a s a' s' where
   goFlex :: Cxt -> Tm -> VTy -> StageExp -> VTy -> StageExp -> IO (Maybe Tm)
   goFlex cxt t a (vStage -> s) a' (vStage -> s') = case (s, s') of
 
-    (StageExp (SHVar _) _, _) -> justUnify cxt a s a' s'
-    (_, StageExp (SHVar _) _) -> justUnify cxt a s a' s'
-
-    (StageExp _ n, StageExp _ n') -> case compare n n' of
+    (StageExp h n, StageExp h' n') | h == h' -> case compare n n' of
       EQ -> do
         unifyWhile cxt a a' s
         pure Nothing
@@ -547,9 +544,12 @@ coerce cxt t a s a' s' = maybe t id <$> go cxt t a s a' s' where
         unifyWhile cxt m a' s'
         pure $ Just downt
 
-  go :: Cxt -> Tm -> VTy -> StageExp -> VTy -> StageExp -> IO (Maybe Tm)
-  go cxt t a s a' s' = case (force a, force a') of
+    _ -> justUnify cxt a s a' s'
 
+  go :: Cxt -> Tm -> VTy -> StageExp -> VTy -> StageExp -> IO (Maybe Tm)
+  go cxt t a s a' s' =
+   -- case traceShow ("coe", showVal cxt a, s, showVal cxt a', s') (force a, force a') of
+   case (force a, force a') of
     (VCode a, VCode a') ->
       (Up <$>) <$> go cxt (Down t) a (vPred s) a' (vPred s')
 
@@ -570,6 +570,15 @@ coerce cxt t a s a' s' = maybe t id <$> go cxt t a s a' s' where
           case body of
             Nothing   -> pure $ Just $ Lam x i (quote (cxt^.len) a') (App (Wk t) coev0 i)
             Just body -> pure $ Just $ Lam x i (quote (cxt^.len) a') body
+
+    (VU _, VU _) | StageExp h n <- vStage s, StageExp h' n' <- vStage s' -> do
+      case () of
+        _ | h == h', n < n' ->
+              pure $ Just $! nTimes (n' - n) Code t
+          | SHZero <- h, SHVar _ <- h', n < n' ->
+              pure $ Just $! nTimes (n' - n) Code t
+          | otherwise ->
+              justUnify cxt a s a' s'
 
     (a@(VNe (HMeta _) _), a'                  ) -> goFlex cxt t a s a' s'
     (a,                   a'@(VNe (HMeta _) _)) -> goFlex cxt t a s a' s'
@@ -603,7 +612,7 @@ check cxt topT ~topA topS = case (topT, force topA) of
     t <- check (bind x NOInserted a topS cxt) t (b (VVar (cxt^.len))) topS
     pure $ Lam x Impl (quote (cxt^.len) a) t
 
-  -- -- inserting a new curried function lambda (TODO!)
+  -- -- -- inserting a new curried function lambda (TODO!)
   -- (t, topA@(VNe (HMeta _) _)) -> do
   --   x <- ("Γ"++) . show <$> readIORef nextMId
   --   dom <- freshMeta cxt (VTel topS) topS
@@ -678,7 +687,13 @@ inferTop cxt = \case
     pure (Lam x i a t, VPi x i va b, s')
   RSrcPos p t ->
     addSrcPos p $ inferTop cxt t
-
+  RLet x a t u -> do
+    (a, s) <- inferU cxt a
+    let ~va = eval (cxt^.vals) a
+    t <- check cxt t va s
+    let ~vt = eval (cxt^.vals) t
+    (u, b, s') <- inferTop (define x va s vt cxt) u
+    pure (Let x a s t u, b, s')
   t -> infer cxt t
 
 infer :: Cxt -> Raw -> IO (Tm, VTy, StageExp)
@@ -712,10 +727,14 @@ infer cxt = \case
           report (cxt^.names) $ IcitMismatch i i'
         u <- check cxt u a s
         pure (App t u i, b (eval (cxt^.vals) u), s)
+
+      -- a bit shitty!
       va -> do
         (u, dom, s') <- infer cxt u
+        -- traceShowM ("apparg", showTm (cxt^.names) u, showVal cxt dom, s')
         cod <- freshMeta (bind "x" NOInserted dom s' cxt) (VU s') s'
         let vcod ~x = eval (VDef (cxt^.vals) x) cod
+        -- traceShowM ("appfun", showTm (cxt^.names) t, showVal cxt va, s)
         t <- coerce cxt t va s (VPi "x" i dom vcod) s'
         pure (App t u i, vcod (eval (cxt^.vals) u), s')
 

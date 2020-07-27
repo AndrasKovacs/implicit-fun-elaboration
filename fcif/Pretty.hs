@@ -77,7 +77,7 @@ pi ns t = (" → "++) . tm tmp ns t
 stage :: StageExp -> ShowS
 stage s = case vStage s of
   StageExp (SHVar x) 0 -> ('?':).(show x++)
-  StageExp (SHVar x) n -> ('?':).(show x++).(" + "++).(show n++)
+  StageExp (SHVar x) n -> showParen True (('?':).(show x++).(" + "++).(show n++))
   StageExp SHZero    n -> (show n++)
 
 instance Show StageExp where

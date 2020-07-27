@@ -87,7 +87,7 @@ test1 = unlines [
   "λ (Bool  : U 0)",
   "  (true  : Bool)",
   "  (false : Bool)",
-  "  (case  : {A : U 0} → Bool → A → A → A)",
+  "  (case  : {A : U} → Bool → A → A → A)",
   "  (List  : U 0 → U 0)",
   "  (nil   : {A : U 0} → List A)",
   "  (cons  : {A : U 0} → A → List A → List A)",
@@ -99,6 +99,18 @@ test1 = unlines [
   "  (rec₀  : {A : U 0} → A → (A → A) → Nat₀ → A)",
   "  (mul₀  : Nat₀ → Nat₀ → Nat₀)",
   "  (add₀  : Nat₀ → Nat₀ → Nat₀).",
+
+  "let id : {A : ^U} → A → A = λ x. x in",
+
+  "let const : {A B : ^U} → A → B → A = λ x y. x in",
+
+  "let comp : {A B C: ^U} → (B → C) → (A → B) → A → C",
+  "    = λ f g x. f (g x) in",
+
+  "let ap : {A B: ^U} → (A → B) → A → B",
+  "   = λ f x. f x in",
+
+  "let foo : Nat₀ → Nat₀ = ap (comp suc₀) (comp suc₀ id) in",
 
   "let Nat₁ : U 1 = (N : U 1) → N → (N → N) → N in",
   "let zero₁ : Nat₁ = λ _ z s. z in",
@@ -119,19 +131,13 @@ test1 = unlines [
   "let fst : {A B} → Pair A B → A = λ p. p _ (λ a b. a) in",
   "let snd : {A B} → Pair A B → B = λ p. p _ (λ a b. b) in",
 
-  "let inlCase : {A : ^U} → ^Bool → ^A → ^A → ^A",
+  "let inlCase : {A : ^U} → Bool → A → A → A",
   "    = case in",
-
-  "let id : {A : ^U} → ^A → ^A = λ x. x in",
-  "let foo = <U 0> in",
 
   "let test : Nat₀ = id n₀10 in",
   "let test : Bool → Nat₀ → Nat₀ = λ b n. inlCase b (add₀ n n₀10) n in",
 
-  "let map : {A B : ^U} → (^A → ^B) → ^(List A → List B)",
-  "    = λ f. foldr (λ a. cons (f a)) nil in",
-
-  "let map2 : {A B : ^U} → ^(A → B) → ^(List A → List B)",
+  "let map : {A B : ^U} → (A → B) → List A → List B",
   "    = λ f. foldr (λ a. cons (f a)) nil in",
 
   "let not : ^Bool → ^Bool = λ b. case b false true in",
@@ -140,28 +146,23 @@ test1 = unlines [
 
   "let exp₀ : Nat₀ → Nat₀ → Nat₀ = λ a b. rec₀ (suc₀ zero₀) (mul₀ b) a in",
 
-  "let exp₁ : Nat₁ → ^Nat₀ → ^Nat₀",
+  "let exp₁ : Nat₁ → Nat₀ → Nat₀",
   "    = λ a b. a _ (suc₀ zero₀) (λ n. mul₀ n b) in",
 
   "let exp5 : Nat₀ → Nat₀ = exp₁ n₁5 in",
 
-  "let lower : Nat₁ → ^Nat₀ = λ n. n _ zero₀ suc₀ in",
+  "let lower : Nat₁ → Nat₀ = λ n. n _ zero₀ suc₀ in",
 
   "let upto : Nat₁ → List₁ Nat₁",
   "    = λ n. n _ (λ acc. cons₁ acc nil₁) (λ hyp acc. hyp (suc₁ acc)) zero₁ in",
 
-  "let expSum : List₁ (^Nat₀) → ^Nat₀",
-  "    = λ ns. ns (List₁ (^Nat₀) → ^Nat₀)",
+  "let expSum : List₁ Nat₀ → Nat₀",
+  "    = λ ns. ns (List₁ Nat₀ → Nat₀)",
   "               (λ n hyp xs. <let x = [n] in hyp (cons₁ x xs)>)",
   "               (λ xs. xs _ add₀ zero₀)",
   "               nil₁ in",
 
   "let test : Nat₀ = expSum (cons₁ n₀5 (cons₁ (add₀ n₀5 n₀10) nil₁)) in",
-
-  "let comp : {A B C: ^U} → (^B → ^C) → ^(A → B) → ^A → ^C",
-  "    = λ f g x. f (g x) in",
-
-  "let test : Nat₀ → Nat₀ = comp suc₀ (comp suc₀ suc₀) in",
 
   "U 0"
   ]

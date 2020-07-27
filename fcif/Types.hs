@@ -28,7 +28,7 @@ instance Show Icit where
 type Stage   = Int
 type StageId = Int
 
-data SHead = SHVar StageId | SHZero
+data SHead = SHVar StageId | SHZero deriving Eq
 data StageExp = StageExp SHead Int
 
 pattern SSuc :: StageExp -> StageExp
