@@ -75,6 +75,9 @@ let lowerNat : Nat₁ → Nat₀ = λ n. n _ zero₀ suc₀ in
 let lowerList : {A : ^U0} → List₁ A → List A
     = λ as. as _ cons nil in
 
+let bar : List₁ ({A:^U} → A → A) = cons₁ (λ x. x) nil₁ in
+let bar : List₁ (Bool → Bool) = map₁ (λ f. f {<Bool>}) bar in
+
 let upto : Nat₁ → List₁ Nat₁
     = λ n. n _ (λ acc. cons₁ acc nil₁) (λ hyp acc. hyp (suc₁ acc)) zero₁ in
 

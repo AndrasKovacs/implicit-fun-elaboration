@@ -16,7 +16,7 @@ import ElabState
 import Errors
 import Pretty
 
-import Debug.Trace
+-- import Debug.Trace
 
 -- Context operations
 --------------------------------------------------------------------------------
@@ -585,9 +585,9 @@ coerce cxt t a s a' s' = maybe t id <$> go cxt t a s a' s' where
 
     (VCode a, a') -> Just <$> coerce cxt (Down t) a (vPred s) a' s'
     (a, VCode a') -> Just . Up <$> coerce cxt t a s a' (vPred s')
-    (a, a')       -> do
-      -- traceShowM (s, s', showVal cxt a, showVal cxt a')
-      justUnify cxt a s a' s'
+    (a, a')       -> justUnify cxt a s a' s'
+
+
 
 checkU :: Cxt -> Raw -> StageExp -> IO Tm
 checkU cxt t s = check cxt t (VU s) s
@@ -612,19 +612,14 @@ check cxt topT ~topA topS = case (topT, force topA) of
     t <- check (bind x NOInserted a topS cxt) t (b (VVar (cxt^.len))) topS
     pure $ Lam x Impl (quote (cxt^.len) a) t
 
-  -- -- -- inserting a new curried function lambda (TODO!)
-  -- (t, topA@(VNe (HMeta _) _)) -> do
-  --   x <- ("Γ"++) . show <$> readIORef nextMId
-  --   dom <- freshMeta cxt (VTel topS) topS
-  --   let vdom = eval (cxt^.vals) dom
-  --   let cxt' = bind x NOInserted (VRec vdom) topS cxt
-  --   (t, (liftVal cxt -> a), s) <- insert cxt' $ infer cxt' t
-  --   newConstancy cxt vdom topS a
-
-  --   unifyStage s topS
-  --   unifyWhile cxt topA (VPiTel x vdom a) topS
-
-  --   pure $ LamTel x dom t
+  (t, topA@(VNe (HMeta _) _)) -> do
+    x <- ("Γ"++) . show <$> readIORef nextMId
+    dom <- freshMeta cxt (VTel topS) topS
+    let vdom = eval (cxt^.vals) dom
+    let cxt' = bind x NOInserted (VRec vdom) topS cxt
+    (t, (liftVal cxt -> !a), s) <- insert cxt' $ infer cxt' t
+    newConstancy cxt vdom topS a
+    coerce cxt (LamTel x dom t) (VPiTel x vdom a) s topA topS
 
   (RCode a, VU (SSuc s)) -> do
     Code <$> checkU cxt a s
@@ -654,20 +649,8 @@ check cxt topT ~topA topS = case (topT, force topA) of
 
   (t, topA) -> do
     (t, va, s) <- insert cxt $ infer cxt t
+    coerce cxt t va s topA topS
 
-    -- traceM "coerce"
-    -- traceM $ showTm (cxt^.names) t
-    -- traceM $ showVal cxt va
-    -- traceM $ showVal cxt topA
-
-    t <- coerce cxt t va s topA topS
-
-    -- traceM (showTm (cxt^.names) t)
-
-    pure t
-    -- unifyStage s topS
-    -- unifyWhile cxt va topA topS
-    -- pure t
 
 -- | We specialcase top-level lambdas (serving as postulates) for better
 --   printing: we don't print them in meta spines. We prefix the top
@@ -731,9 +714,9 @@ infer cxt = \case
       -- a bit shitty!
       va -> do
         (u, dom, s') <- infer cxt u
-        -- traceShowM ("apparg", showTm (cxt^.names) u, showVal cxt dom, s')
         cod <- freshMeta (bind "x" NOInserted dom s' cxt) (VU s') s'
         let vcod ~x = eval (VDef (cxt^.vals) x) cod
+        -- traceShowM ("apparg", showTm (cxt^.names) u, showVal cxt dom, s')
         -- traceShowM ("appfun", showTm (cxt^.names) t, showVal cxt va, s)
         t <- coerce cxt t va s (VPi "x" i dom vcod) s'
         pure (App t u i, vcod (eval (cxt^.vals) u), s')

@@ -137,8 +137,8 @@ test1 = unlines [
   "let test : Nat₀ = id n₀10 in",
   "let test : Bool → Nat₀ → Nat₀ = λ b n. inlCase b (add₀ n n₀10) n in",
 
-  "let map : {A B : ^U} → (A → B) → List A → List B",
-  "    = λ f. foldr (λ a. cons (f a)) nil in",
+  "let map : {A B : ^U} → (^A → ^B) → ^(List A) → ^(List B)",
+  "    = λ {A}{B} f. foldr (λ a. cons (f a)) nil in",
 
   "let not : ^Bool → ^Bool = λ b. case b false true in",
 
@@ -162,7 +162,13 @@ test1 = unlines [
   "               (λ xs. xs _ add₀ zero₀)",
   "               nil₁ in",
 
+  "let map₁ : {A B} → (A → B) → List₁ A → List₁ B",
+  "  = λ f as. as _ (λ a. cons₁ (f  a)) nil₁ in",
+
   "let test : Nat₀ = expSum (cons₁ n₀5 (cons₁ (add₀ n₀5 n₀10) nil₁)) in",
+
+  "let bar : List₁ ({A:^U} → A → A) = cons₁ (λ x. x) nil₁ in",
+  "let bar : List₁ (Bool → Bool) = map₁ (λ f. f {_}) bar in",
 
   "U 0"
   ]
