@@ -95,11 +95,9 @@ vAppSp h = go where
 
 vStage :: StageExp -> StageExp
 vStage = \case
-  SVar x -> case runLookupStageVar x of
-              Nothing -> SVar x
-              Just s  -> vStage s
-  SSuc e -> SSuc (vStage e)
-  SZero  -> SZero
+  StageExp (SHVar x) n | Just (StageExp h n') <- runLookupStageVar x ->
+    vStage (StageExp h (n + n'))
+  s -> s
 
 sExp2Lit :: StageExp -> Stage
 sExp2Lit s = go 0 (vStage s) where

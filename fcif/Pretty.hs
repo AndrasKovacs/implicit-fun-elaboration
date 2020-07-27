@@ -75,10 +75,10 @@ pi ns (PiTel (fresh ns -> x) a b) | x /= "_" =
 pi ns t = (" → "++) . tm tmp ns t
 
 stage :: StageExp -> ShowS
-stage = \case
-  SVar x -> ('?':).(show x++)
-  SSuc s -> showParen True (("Suc "++).stage s)
-  SZero  -> ("0"++)
+stage s = case vStage s of
+  StageExp (SHVar x) 0 -> ('?':).(show x++)
+  StageExp (SHVar x) n -> ('?':).(show x++).(" + "++).(show n++)
+  StageExp SHZero    n -> (show n++)
 
 instance Show StageExp where
   show s = stage s []

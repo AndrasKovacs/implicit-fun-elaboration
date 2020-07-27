@@ -376,14 +376,13 @@ unifyWhile cxt l r s =
   `catch`
   (report (cxt^.names) . UnifyErrorWhile (quote (cxt^.len) l) (quote (cxt^.len) r))
 
--- occurs check!
+
 solveStage :: StageId -> StageExp -> IO ()
-solveStage x s = do
-  let occurs = \case
-        SVar x' -> when (x == x') $ report [] $ StageError (SVar x) s
-        SSuc s  -> occurs s
-        SZero   -> pure ()
-  occurs s
+solveStage x s@(StageExp h n) = do
+  -- occurs check
+  case h of
+    SHVar x' | x == x' -> report [] $ StageError (SVar x) s
+    _                  -> pure ()
   modifyStageVar x $ maybe (Just s) (error "impossible")
 
 unifyStage :: StageExp -> StageExp -> IO ()
@@ -506,8 +505,47 @@ inferU cxt t = do
   unifyWhile cxt a (VU s) s
   pure (t, s)
 
+nTimes :: Int -> (a -> a) -> (a -> a)
+nTimes n f ~a | n <= 0 = a
+nTimes n f ~a = nTimes (n - 1) f (f a)
+
 coerce :: Cxt -> Tm -> VTy -> StageExp -> VTy -> StageExp -> IO Tm
 coerce cxt t a s a' s' = maybe t id <$> go cxt t a s a' s' where
+
+  justUnify :: Cxt -> VTy -> StageExp -> VTy -> StageExp -> IO (Maybe Tm)
+  justUnify cxt a s a' s' = do
+    unifyStage s s'
+    unifyWhile cxt a a' s
+    pure Nothing
+
+  goFlex :: Cxt -> Tm -> VTy -> StageExp -> VTy -> StageExp -> IO (Maybe Tm)
+  goFlex cxt t a (vStage -> s) a' (vStage -> s') = case (s, s') of
+
+    (StageExp (SHVar _) _, _) -> justUnify cxt a s a' s'
+    (_, StageExp (SHVar _) _) -> justUnify cxt a s a' s'
+
+    (StageExp _ n, StageExp _ n') -> case compare n n' of
+      EQ -> do
+        unifyWhile cxt a a' s
+        pure Nothing
+
+      -- lift lhs to level of rhs
+      LT -> do
+        let diff = n' - n
+            upt  = nTimes diff Up t
+            upa  = nTimes diff VCode a
+        unifyWhile cxt upa a' s'
+        pure $ Just upt
+
+      -- lower lhs to level of rhs
+      GT -> do
+        let diff = n - n'
+        m <- eval (cxt^.vals) <$> freshMeta cxt (VU s') s'
+        let upm   = nTimes diff VCode m
+            downt = nTimes diff Down t
+        unifyWhile cxt a upm s
+        unifyWhile cxt m a' s'
+        pure $ Just downt
 
   go :: Cxt -> Tm -> VTy -> StageExp -> VTy -> StageExp -> IO (Maybe Tm)
   go cxt t a s a' s' = case (force a, force a') of
@@ -533,13 +571,14 @@ coerce cxt t a s a' s' = maybe t id <$> go cxt t a s a' s' where
             Nothing   -> pure $ Just $ Lam x i (quote (cxt^.len) a') (App (Wk t) coev0 i)
             Just body -> pure $ Just $ Lam x i (quote (cxt^.len) a') body
 
+    (a@(VNe (HMeta _) _), a'                  ) -> goFlex cxt t a s a' s'
+    (a,                   a'@(VNe (HMeta _) _)) -> goFlex cxt t a s a' s'
+
     (VCode a, a') -> Just <$> coerce cxt (Down t) a (vPred s) a' s'
     (a, VCode a') -> Just . Up <$> coerce cxt t a s a' (vPred s')
     (a, a')       -> do
-      traceShowM (s, s', showVal cxt a, showVal cxt a')
-      unifyStage s s'
-      unifyWhile cxt a a' s
-      pure Nothing
+      -- traceShowM (s, s', showVal cxt a, showVal cxt a')
+      justUnify cxt a s a' s'
 
 checkU :: Cxt -> Raw -> StageExp -> IO Tm
 checkU cxt t s = check cxt t (VU s) s

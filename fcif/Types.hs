@@ -25,7 +25,26 @@ instance Show Icit where
   show Expl = "explicit"
   show Impl = "implicit"
 
-type Stage = Int
+type Stage   = Int
+type StageId = Int
+
+data SHead = SHVar StageId | SHZero
+data StageExp = StageExp SHead Int
+
+pattern SSuc :: StageExp -> StageExp
+pattern SSuc s <- ((\case StageExp h n | n > 0     -> Just (StageExp h (n - 1))
+                                       | otherwise -> Nothing) -> Just s)
+                 where
+  SSuc (StageExp h n) = StageExp h (n + 1)
+
+pattern SZero :: StageExp
+pattern SZero = StageExp SHZero 0
+
+pattern SVar :: StageId -> StageExp
+pattern SVar x = StageExp (SHVar x) 0
+
+sLit :: Stage -> StageExp
+sLit = StageExp SHZero
 
 icit :: Icit -> a -> a -> a
 icit Impl i e = i
@@ -129,16 +148,6 @@ data Cxt = Cxt {
   cxtNameOrigin :: [NameOrigin],
   cxtLen        :: Int}
 
-type StageId = Int
-
-data StageExp
-  = SVar StageId
-  | SSuc StageExp
-  | SZero
-
-sLit :: Stage -> StageExp
-sLit 0 = SZero
-sLit s = SSuc (sLit (s - 1))
 
 data Tm
   = Var Ix                      -- ^ x
