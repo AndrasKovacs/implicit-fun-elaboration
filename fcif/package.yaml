@@ -1,5 +1,5 @@
 
-name:        fcif
+name:        mstt
 version:     0.1.0.0
 license:     BSD3
 category:    Language
@@ -7,11 +7,13 @@ description: "Implementation of \"Elaboration with First-Class Implicit Function
 
 default-extensions:
 - BangPatterns
+- ConstraintKinds
 - DeriveAnyClass
 - ExplicitNamespaces
 - FlexibleContexts
 - FlexibleInstances
 - FunctionalDependencies
+- KindSignatures
 - LambdaCase
 - MultiParamTypeClasses
 - PatternSynonyms

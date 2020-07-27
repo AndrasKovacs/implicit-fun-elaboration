@@ -9,6 +9,10 @@ import Lens.Micro.Platform
 
 import qualified Data.IntMap.Strict as IM
 import qualified Data.IntSet        as IS
+import Data.Kind
+
+type Dbg = (() :: Constraint)
+-- type Dbg = HasCallStack
 
 -- Raw syntax
 --------------------------------------------------------------------------------

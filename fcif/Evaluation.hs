@@ -4,6 +4,8 @@ module Evaluation where
 import Types
 import ElabState
 
+import GHC.Stack
+
 vProj1 :: Val -> Val
 vProj1 (VTcons t u)    = t
 vProj1 (VNe h sp)      = VNe h (SProj1 sp)
@@ -105,10 +107,12 @@ sExp2Lit s = go 0 (vStage s) where
   go acc (SSuc s) = go (acc + 1) s
   go _   _        = error "impossible"
 
-vPred :: StageExp -> StageExp
+vPred :: HasCallStack => StageExp -> StageExp
 vPred s = case vStage s of
   SSuc e         -> e
-  _              -> error "impossible"
+  e              -> error "impossible"
+  -- e              -> trace "\nBAD PRED\n" e
+  -- e              -> error "impossible"
 
 vUp :: Val -> Val
 vUp = \case
