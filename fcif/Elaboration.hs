@@ -8,6 +8,7 @@ import Data.Maybe
 import Lens.Micro.Platform
 import qualified Data.IntMap as IM
 import qualified Data.IntSet as IS
+import Data.IORef
 
 import Types
 import Evaluation
@@ -583,7 +584,8 @@ coerce cxt t a s a' s' = maybe t id <$> go cxt t a s a' s' where
       case () of
         _ | h == h', n < n' ->
               pure $ Just $! nTimes (n' - n) Code t
-          | SHZero <- h, SHVar _ <- h', n < n' ->
+          | SHZero <- h, SHVar x <- h', n < n' -> do
+              solveStage x SZero
               pure $ Just $! nTimes (n' - n) Code t
           | otherwise ->
               justUnify cxt a s a' s'
@@ -620,14 +622,14 @@ check cxt topT ~topA topS = case (topT, force topA) of
     t <- check (bind x NOInserted a topS cxt) t (b (VVar (cxt^.len))) topS
     pure $ Lam x Impl (quote (cxt^.len) a) t
 
-  -- (t, topA@(VNe (HMeta _) _)) -> do
-  --   x <- ("Γ"++) . show <$> readIORef nextMId
-  --   dom <- freshMeta cxt (VTel topS) topS
-  --   let vdom = eval (cxt^.vals) dom
-  --   let cxt' = bind x NOInserted (VRec vdom) topS cxt
-  --   (t, (liftVal cxt -> !a), s) <- insert cxt' $ infer cxt' t
-  --   newConstancy cxt vdom topS a
-  --   coerce cxt (LamTel x dom t) (VPiTel x vdom a) s topA topS
+  (t, topA@(VNe (HMeta _) _)) -> do
+    x <- ("Γ"++) . show <$> readIORef nextMId
+    dom <- freshMeta cxt (VTel topS) topS
+    let vdom = eval (cxt^.vals) dom
+    let cxt' = bind x NOInserted (VRec vdom) topS cxt
+    (t, (liftVal cxt -> !a), s) <- insert cxt' $ infer cxt' t
+    newConstancy cxt vdom topS a
+    coerce cxt (LamTel x dom t) (VPiTel x vdom a) s topA topS
 
   (RCode a, VU (SSuc s)) -> do
     Code <$> checkU cxt a s
@@ -637,9 +639,6 @@ check cxt topT ~topA topS = case (topT, force topA) of
     let ~va = eval (cxt^.vals) a
     b <- checkU (bind x NOSource va s cxt) b s
     pure $ Pi x i a b
-
-  (RDown t, a) -> do
-    Down <$> check cxt t (VCode a) (SSuc topS)
 
   (RUp t, VCode a) -> do
     Up <$> check cxt t a (vPred topS)

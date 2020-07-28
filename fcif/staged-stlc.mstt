@@ -103,9 +103,6 @@ let t : Tm nil (fun (fun ι ι) (fun ι ι))
         (app (var (vs vz)) (app (var (vs vz))
 	(var vz)))))))) in
 
-let foo : (Bot → Bot) → Bot → Bot = [Tmᴱ t tt] in
-
--- issue:
---   - the elaboration of the above foo!
+let foo = [Tmᴱ t tt] in
 
 U0

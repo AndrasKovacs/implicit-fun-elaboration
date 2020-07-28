@@ -76,14 +76,14 @@ let lowerList : {A : ^U0} → List₁ A → List A
     = λ as. as _ cons nil in
 
 let bar : List₁ ({A:^U} → A → A) = cons₁ (λ x. x) nil₁ in
-let bar : List₁ (Bool → Bool) = map₁ (λ f. f {<Bool>}) bar in
+let bar : List₁ (Bool → Bool) = map₁ (λ f. f {_}) bar in
 
 let upto : Nat₁ → List₁ Nat₁
     = λ n. n _ (λ acc. cons₁ acc nil₁) (λ hyp acc. hyp (suc₁ acc)) zero₁ in
 
 let expSum : List₁ Nat₀ → Nat₀
     = λ ns. ns (List₁ Nat₀ → Nat₀)
-               (λ n hyp xs. <let x = [n] in hyp (cons₁ x xs)>)
+               (λ n hyp xs. let x : Nat₀ = n in hyp (cons₁ x xs))
                (λ xs. xs _ add₀ zero₀)
                nil₁ in
 
