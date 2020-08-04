@@ -32,7 +32,7 @@ instance Show Icit where
 type Stage   = Int
 type StageId = Int
 
-data SHead = SHVar StageId | SHZero deriving Eq
+data SHead = SHVar StageId | SHZero deriving (Eq)
 data StageExp = StageExp SHead Int
 
 pattern SSuc :: StageExp -> StageExp
@@ -133,15 +133,13 @@ pattern TSnoc as a s <- ((\case TBound as a s -> Just (as, a, s)
                                 TDef as a s   -> Just (as, a, s)
                                 TNil          -> Nothing) -> Just (as, a, s))
 
-lvlName :: [Name] -> Lvl -> Name
-lvlName ns x = ns !! (length ns - x - 1)
-
 -- | We need to distinguish invented names from source names, as
 --   we don't want the former to shadow the latter during name lookup
 --   in elaboration.
-data NameOrigin =
-    NOSource        -- ^ Names which come from surface syntax.
-  | NOInserted      -- ^ Names of binders inserted by elaboration.
+data Origin =
+    Source        -- ^ Names which come from surface syntax.
+  | Inserted      -- ^ Names of binders inserted by elaboration.
+  deriving (Eq, Show)
 
 
 -- | Context for elaboration and unification.
@@ -149,17 +147,21 @@ data Cxt = Cxt {
   cxtVals       :: Vals,
   cxtTypes      :: Types,
   cxtNames      :: [Name],
-  cxtNameOrigin :: [NameOrigin],
+  cxtNameOrigin :: [Origin],
   cxtLen        :: Int}
 
+instance Show Cxt where show = show . cxtNames
+
+lvlName :: Cxt -> Lvl -> Name
+lvlName cxt x = cxtNames cxt !! (cxtLen cxt - x - 1)
 
 data Tm
   = Var Ix                      -- ^ x
   | Let Name Ty StageExp Tm Tm  -- ^ let x : A : U i = t in u
 
-  | Pi Name Icit Ty Ty  -- ^ (x : A : U i) → B)  or  {x : A : U i} → B
-  | Lam Name Icit Ty Tm -- ^ λ(x : A).t  or  λ{x : A}.t
-  | App Tm Tm Icit      -- ^ t u  or  t {u}
+  | Pi Name Icit Ty Ty         -- ^ (x : A : U i) → B)  or  {x : A : U i} → B
+  | Lam Name Icit Origin Ty Tm -- ^ λ(x : A).t  or  λ{x : A}.t
+  | App Tm Tm Icit Origin      -- ^ t u  or  t {u}
 
   | Code Tm             -- ^ ^A
   | Up Tm               -- ^ <t>
@@ -188,7 +190,7 @@ data Tm
 
 data Spine
   = SNil
-  | SApp Spine ~Val Icit
+  | SApp Spine ~Val Icit Origin
   | SAppTel ~Val Spine ~Val
   | SProj1 Spine
   | SProj2 Spine
@@ -209,7 +211,7 @@ data Val
   = VNe Head Spine
 
   | VPi Name Icit ~VTy (VTy -> VTy)
-  | VLam Name Icit ~VTy (Val -> Val)
+  | VLam Name Icit Origin ~VTy (Val -> Val)
   | VU StageExp
 
   | VCode VTy

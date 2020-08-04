@@ -53,11 +53,11 @@ forceSp sp =
     VNe _ sp -> sp
     _        -> error "impossible"
 
-vApp :: Val -> Val -> Icit -> Val
-vApp (VLam _ _ _ t)  ~u i = t u
-vApp (VNe h sp)      ~u i = VNe h (SApp sp u i)
-vApp (VLamTel x a t) ~u i = vApp (vLamTel id x a t) u i
-vApp _                _ _ = error "impossible"
+vApp :: Val -> Val -> Icit -> Origin -> Val
+vApp (VLam _ _ _ _ t) ~u i o = t u
+vApp (VNe h sp)       ~u i o = VNe h (SApp sp u i o)
+vApp (VLamTel x a t)  ~u i o = vApp (vLamTel id x a t) u i o
+vApp _                 _ _ o = error "impossible"
 
 vPiTel :: (Val -> Val) -> Name -> VTy -> (Val -> Val) -> Val
 vPiTel k x a b = case force a of
@@ -73,14 +73,14 @@ vLamTel k x a t = case force a of
   VTEmpty       -> k (t VTempty)
   VTCons _ a as -> let x1 = x ++ "1"
                        x2 = x ++ "2"
-                   in VLam x1 Impl a $ \ ~x1 ->
+                   in VLam x1 Impl Inserted a $ \ ~x1 ->
                       vLamTel id x2 (as x1) $ \ ~x2 -> t (VTcons x1 x2)
   a             -> VLamTel x a t
 
 vAppTel ::  VTy -> Val -> Val -> Val
 vAppTel a ~t ~u = case force a of
   VTEmpty       -> t
-  VTCons _ a as -> let u1 = vProj1 u in vAppTel (as u1) (vApp t u1 Impl) (vProj2 u)
+  VTCons _ a as -> let u1 = vProj1 u in vAppTel (as u1) (vApp t u1 Impl Inserted) (vProj2 u)
   a             -> case t of
                      VNe h sp      -> VNe h (SAppTel a sp u)
                      VLamTel _ _ t -> t u
@@ -89,7 +89,7 @@ vAppTel a ~t ~u = case force a of
 vAppSp :: Val -> Spine -> Val
 vAppSp h = go where
   go SNil             = h
-  go (SApp sp u i)    = vApp (go sp) u i
+  go (SApp sp u i o)  = vApp (go sp) u i o
   go (SAppTel a sp u) = vAppTel a (go sp) u
   go (SProj1 sp)      = vProj1 (go sp)
   go (SProj2 sp)      = vProj2 (go sp)
@@ -139,8 +139,8 @@ eval vs = go where
     U s           -> VU (vStage s)
     Meta m        -> vMeta m
     Pi x i a b    -> VPi x i (go a) (goBind b)
-    Lam x i a t   -> VLam x i (go a) (goBind t)
-    App t u i     -> vApp (go t) (go u) i
+    Lam x i o a t -> VLam x i o (go a) (goBind t)
+    App t u i o   -> vApp (go t) (go u) i o
     Tel s         -> VTel (vStage s)
     TEmpty        -> VTEmpty
     TCons x a b   -> VTCons x (go a) (goBind b)
@@ -169,25 +169,25 @@ quote d = go where
       let goSp SNil = case h of
             HMeta m -> Meta m
             HVar x  -> Var (d - x - 1)
-          goSp (SApp sp u i)    = App (goSp sp) (go u) i
+          goSp (SApp sp u i o)  = App (goSp sp) (go u) i o
           goSp (SAppTel a sp u) = AppTel (go a) (goSp sp) (go u)
           goSp (SProj1 sp)      = Proj1 (goSp sp)
           goSp (SProj2 sp)      = Proj2 (goSp sp)
           goSp (SDown sp)       = Down (goSp sp)
       in goSp (forceSp sp)
 
-    VLam x i a t  -> Lam x i (go a) (goBind t)
-    VPi x i a b   -> Pi x i (go a) (goBind b)
-    VU s          -> U (vStage s)
-    VTel s        -> Tel (vStage s)
-    VRec a        -> Rec (go a)
-    VTEmpty       -> TEmpty
-    VTCons x a as -> TCons x (go a) (goBind as)
-    VTempty       -> Tempty
-    VTcons t u    -> Tcons (go t) (go u)
-    VPiTel x a b  -> PiTel x (go a) (goBind b)
-    VLamTel x a t -> LamTel x (go a) (goBind t)
-    VCode a       -> Code (go a)
-    VUp t         -> Up (go t)
+    VLam x i o a t -> Lam x i o (go a) (goBind t)
+    VPi x i a b    -> Pi x i (go a) (goBind b)
+    VU s           -> U (vStage s)
+    VTel s         -> Tel (vStage s)
+    VRec a         -> Rec (go a)
+    VTEmpty        -> TEmpty
+    VTCons x a as  -> TCons x (go a) (goBind as)
+    VTempty        -> Tempty
+    VTcons t u     -> Tcons (go t) (go u)
+    VPiTel x a b   -> PiTel x (go a) (goBind b)
+    VLamTel x a t  -> LamTel x (go a) (goBind t)
+    VCode a        -> Code (go a)
+    VUp t          -> Up (go t)
 
   goBind t = quote (d + 1) (t (VVar d))

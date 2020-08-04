@@ -15,9 +15,9 @@ zonk vs t = go t where
     Meta m       -> case runLookupMeta m of
                       Solved v -> Left v
                       _        -> Right (Meta m)
-    App t u ni   -> case goSp t of
-                      Left t  -> Left (vApp t (eval vs u) ni)
-                      Right t -> Right $ App t (go u) ni
+    App t u ni o   -> case goSp t of
+                        Left t  -> Left (vApp t (eval vs u) ni o)
+                        Right t -> Right $ App t (go u) ni o
     AppTel a t u -> case goSp t of
                       Left t  -> Left (vAppTel (eval vs a) t (eval vs u))
                       Right t -> Right $ AppTel (go a) t (go u)
@@ -33,10 +33,10 @@ zonk vs t = go t where
                        _          -> error "impossible"
     U s           -> U (vStage s)
     Pi x i a b    -> Pi x i (go a) (goBind b)
-    App t u ni    -> case goSp t of
-                       Left t  -> quote (valsLen vs) (vApp t (eval vs u) ni)
-                       Right t -> App t (go u) ni
-    Lam x i a t   -> Lam x i (go a) (goBind t)
+    App t u ni o  -> case goSp t of
+                       Left t  -> quote (valsLen vs) (vApp t (eval vs u) ni o)
+                       Right t -> App t (go u) ni o
+    Lam x i o a t -> Lam x i o (go a) (goBind t)
     Let x a s t u -> Let x (go a) (vStage s) (go t) (goBind u)
     Tel s         -> Tel (vStage s)
     TEmpty        -> TEmpty

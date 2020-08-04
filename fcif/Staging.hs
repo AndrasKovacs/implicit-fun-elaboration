@@ -11,7 +11,7 @@ Assumes that input is zonked.
 
 module Staging (stage)  where
 
-import Types (Name, Lvl, MId, Icit(..), Stage, Tm(..), Ix, sLit)
+import Types (Name, Lvl, MId, Icit(..), Stage, Tm(..), Ix, sLit, Origin(..))
 import Evaluation (sExp2Lit)
 
 type VTy = Val
@@ -23,8 +23,8 @@ data Val
   | VMeta MId
 
   | VPi Name Icit VTy (Val -> Val)
-  | VLam Name Icit VTy (Val -> Val)
-  | VApp Val Val Icit
+  | VLam Name Icit Origin VTy (Val -> Val)
+  | VApp Val Val Icit Origin
 
   | VCode Val
   | VUp Val
@@ -65,10 +65,10 @@ vVar vs s s' x = go vs x where
 sPred :: Stage -> Stage
 sPred s = if s > 0 then s - 1 else error "impossible"
 
-vApp :: Val -> Val -> Icit -> Val
-vApp t u i = case (t, u) of
-  (f@(VLam x i a t), !u) -> t u
-  (t, u)                 -> VApp t u i
+vApp :: Val -> Val -> Icit -> Origin -> Val
+vApp t u i o = case (t, u) of
+  (f@(VLam x i _ a t), !u) -> t u
+  (t, u)                   -> VApp t u i o
 
 vProj1 :: Val -> Val
 vProj1 (VTcons t u) = t
@@ -92,14 +92,14 @@ vLamTel x a t = case a of
   VTEmpty       -> t VTempty
   VTCons _ a as -> let x1 = x ++ "1"
                        x2 = x ++ "2"
-                   in VLam x1 Impl a $ \ ~x1 ->
+                   in VLam x1 Impl Inserted a $ \ ~x1 ->
                       vLamTel x2 (as x1) $ \ ~x2 -> t (VTcons x1 x2)
   a             -> VLamTel x a t
 
 vAppTel :: VTy -> Val -> Val -> Val
 vAppTel a ~t ~u = case a of
   VTEmpty       -> t
-  VTCons _ a as -> let u1 = vProj1 u in vAppTel (as u1) (vApp t u1 Impl) (vProj2 u)
+  VTCons _ a as -> let u1 = vProj1 u in vAppTel (as u1) (vApp t u1 Impl Inserted) (vProj2 u)
   a             -> case t of
                      VLamTel _ _ t -> t u
                      t             -> VAppTel a t u
@@ -132,9 +132,9 @@ eval vs s s' = go where
         (eval (VDef vs t') s s' u)
         (VLet x (eval vs s s'' a) s'' t' (goBind u))
 
-    Pi x i a b   -> VPi x i (go a) (goBind b)
-    Lam x i a t  -> VLam x i (go a) (goBind t)
-    App t u i    -> cmpStage s s' (vApp (go t) (go u) i) (VApp (go t) (go u) i)
+    Pi x i a b    -> VPi x i (go a) (goBind b)
+    Lam x i o a t -> VLam x i o (go a) (goBind t)
+    App t u i o   -> cmpStage s s' (vApp (go t) (go u) i o) (VApp (go t) (go u) i o)
 
     U s          -> VU (sExp2Lit s)
     Meta m       -> VMeta m
@@ -168,14 +168,14 @@ quote d = go where
     VVar x         -> Var (d - x - 1)
     VMeta m        -> Meta m
     VLet x a s t u -> Let x (go a) (sLit s) (go t) (goBind u)
-    VApp t u i     -> App (go t) (go u) i
+    VApp t u i o   -> App (go t) (go u) i o
     VCode a        -> Code (go a)
     VUp t          -> Up (go t)
     VDown t        -> Down (go t)
     VProj1 t       -> Proj1 (go t)
     VProj2 t       -> Proj2 (go t)
     VAppTel a t u  -> AppTel (go a) (go t) (go u)
-    VLam x i a t   -> Lam x i (go a) (goBind t)
+    VLam x i o a t -> Lam x i o (go a) (goBind t)
     VPi x i a b    -> Pi x i (go a) (goBind b)
     VU s           -> U (sLit s)
     VTel s         -> Tel (sLit s)

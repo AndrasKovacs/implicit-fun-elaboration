@@ -57,14 +57,17 @@ let map : {A B : ^U} → (A → B) → List A → List B
     = λ f. foldr (λ a. cons (f a)) nil in
 
 let map₁ : {A B} → (A → B) → List₁ A → List₁ B
-    = λ f as. as _ (λ a. cons₁ (f  a)) nil₁ in
+    = λ f as. as _ (λ a. cons₁ (f a)) nil₁ in
 
 let not : ^Bool → ^Bool = λ b. case b false true in
 
 let mapNot : List Bool → List Bool = map not in
 
-let exp₀ : Nat₀ → Nat₀ → Nat₀ = λ a b. rec₀ (suc₀ zero₀) (mul₀ b) a in
+-- exponentiation for Nat₀
+let exp₀ : Nat₀ → Nat₀ → Nat₀ =
+  λ a b. rec₀ (suc₀ zero₀) (mul₀ b) a in
 
+-- "staged" exponentiation
 let exp₁ : Nat₁ → Nat₀ → Nat₀
     = λ a b. a _ (suc₀ zero₀) (λ n. mul₀ n b) in
 

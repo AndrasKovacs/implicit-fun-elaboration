@@ -96,6 +96,7 @@ let Tmᴱ : {Γ:Con}{A:Ty} → Tm Γ A → Conᴱ Γ → Tyᴱ A
 
 --------------------------------------------------------------------------------
 
+-- t : Tm nil ((ι ⇒ ι) ⇒ (ι ⇒ ι))
 let t : Tm nil (fun (fun ι ι) (fun ι ι))
   = lam (lam
         (app (var (vs vz)) (app (var (vs vz))
@@ -105,4 +106,4 @@ let t : Tm nil (fun (fun ι ι) (fun ι ι))
 
 let foo = [Tmᴱ t tt] in
 
-U0
+foo

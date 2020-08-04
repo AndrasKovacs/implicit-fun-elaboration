@@ -3,7 +3,7 @@ name:        mstt
 version:     0.1.0.0
 license:     BSD3
 category:    Language
-description: "Implementation of \"Elaboration with First-Class Implicit Function Types\""
+description: "Implementation of a small type-theory with multi-stage elaboration"
 
 default-extensions:
 - BangPatterns

@@ -93,9 +93,19 @@ solveStagesTo0 =
 
 --------------------------------------------------------------------------------
 
+showInsertions :: IORef Bool
+showInsertions = runIO (newIORef False)
+{-# noinline showInsertions #-}
+
+showingInsertions :: (Bool -> a) -> a
+showingInsertions f = runIO (f <$> readIORef showInsertions)
+
+--------------------------------------------------------------------------------
+
 reset :: IO ()
 reset = do
   writeIORef mcxt mempty
   writeIORef nextMId 0
+  writeIORef showInsertions False
   writeIORef stages mempty
   writeIORef nextStageId 0
