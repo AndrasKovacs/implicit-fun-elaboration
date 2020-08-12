@@ -50,8 +50,8 @@ let snd : {A B} → Pair A B → B = λ p. p _ (λ a b. b) in
 
 let inlCase : {A : ^U} → Bool → A → A → A = case in
 
-let test : Nat₀ = id n₀10 in
-let test : Bool → Nat₀ → Nat₀ = λ b n. inlCase b (add₀ n n₀10) n in
+let idTest : Nat₀ = id n₀10 in
+let inlCaseTest : Bool → Nat₀ → Nat₀ = λ b n. inlCase b (add₀ n n₀10) n in
 
 let map : {A B : ^U} → (A → B) → List A → List B
     = λ f. foldr (λ a. cons (f a)) nil in
@@ -78,9 +78,6 @@ let lowerNat : Nat₁ → Nat₀ = λ n. n _ zero₀ suc₀ in
 let lowerList : {A : ^U0} → List₁ A → List A
     = λ as. as _ cons nil in
 
-let bar : List₁ ({A:^U} → A → A) = cons₁ (λ x. x) nil₁ in
-let bar : List₁ (Bool → Bool) = map₁ (λ f. f {_}) bar in
-
 let upto : Nat₁ → List₁ Nat₁
     = λ n. n _ (λ acc. cons₁ acc nil₁) (λ hyp acc. hyp (suc₁ acc)) zero₁ in
 
@@ -90,7 +87,7 @@ let expSum : List₁ Nat₀ → Nat₀
                (λ xs. xs _ add₀ zero₀)
                nil₁ in
 
-let test : Nat₀ = expSum (cons₁ n₀5 (cons₁ (add₀ n₀5 n₀10) nil₁)) in
-let test : Nat₀ = lowerNat n₁10 in
+let expSumTest : Nat₀ = expSum (cons₁ n₀5 (cons₁ (add₀ n₀5 n₀10) nil₁)) in
+let lowerNatTest : Nat₀ = lowerNat n₁10 in
 
 U 0

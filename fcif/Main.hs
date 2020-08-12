@@ -147,7 +147,10 @@ main = mainWith (parseOpts =<< (unwords <$> getArgs)) parseStdin
 main' :: String -> String -> IO ()
 main' args src = mainWith (parseOpts args) ((,src) <$> parseString src)
 
+
 test1 = unlines [
+
+
   "λ (Bool  : U 0)",
   "  (true  : Bool)",
   "  (false : Bool)",
@@ -163,6 +166,8 @@ test1 = unlines [
   "  (rec₀  : {A : U 0} → A → (A → A) → Nat₀ → A)",
   "  (mul₀  : Nat₀ → Nat₀ → Nat₀)",
   "  (add₀  : Nat₀ → Nat₀ → Nat₀).",
+
+  "let test : List (U 0) = nil in",
 
   "let id : {A : ^U} → A → A = λ x. x in",
 
@@ -235,10 +240,6 @@ test1 = unlines [
 
   "let test : Nat₀ = expSum (cons₁ n₀5 (cons₁ (add₀ n₀5 n₀10) nil₁)) in",
 
-  "let bar : List₁ ({A:^U} → A → A) = cons₁ (λ x. x) nil₁ in",
-  "let bar : List₁ (Bool → Bool) = map₁ (λ f. f {<Bool>}) bar in",
-
-  "let kek : {A} → A → A = λ x. x in",
 
   "U 0"
   ]

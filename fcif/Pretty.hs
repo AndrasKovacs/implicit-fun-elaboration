@@ -17,7 +17,7 @@ par p p' = showParen (p' < p)
 atomp = 3  -- identifiers, U, ε, Tel
 appp  = 2  -- application (functions, π₁, π₂, Rec): assocs to left
 recp  = 1  -- _∷_ : assocs to right
-tmp   = 0  -- lam, let, Pi, PiTel, _▷_ : assocs to right
+tmp   = 0  -- lam, let, Pi, _▷_ : assocs to right
 
 fresh :: [Name] -> Name -> Name
 fresh ns "_" = "_"
@@ -38,30 +38,26 @@ stage s = case vStage s of
 instance Show StageExp where
   show s = stage s []
 
--- | Prints a spine, also returns whether the spine is meta-headed.
-spine :: [Name] -> Tm -> (ShowS, Bool)
-spine ns (App (spine ns -> (tp, metasp)) u i o) =
+-- | Prints a spine, also returns whether a) the spine is meta-headed,
+--   b) the spine is an atom when implicit applications are omitted.
+spine :: [Name] -> Tm -> (ShowS, Bool, Bool)
+spine ns (App (spine ns -> (tp, metasp, isAtom)) u i o) =
   showingInsertions $ \case
     b | (o == Source) || b ->
         let up | True <- metasp, Var x <- u, '*':_ <- ns !! x =
                    id
                | otherwise =
                    (' ':) . icit i (bracket (tm tmp ns u)) (tm atomp ns u)
-        in (tp . up, metasp)
+        in (tp . up, metasp, False)
       | otherwise ->
-        (tp, metasp)
-spine ns (AppTel a (spine ns -> (tp, metasp)) u) =
-  (tp . (' ':) . bracket (tm tmp ns u . (" : "++) . tm tmp ns a), metasp)
+        (tp, metasp, isAtom)
 spine ns (Meta m) =
-  (tm atomp ns (Meta m), True)
+  (tm atomp ns (Meta m), True, True)
 spine ns t =
-  (tm atomp ns t, False)
+  (tm atomp ns t, False, True)
 
 lamBind :: Name -> Icit -> ShowS
 lamBind x i = icit i bracket id ((if null x then "_" else x) ++)
-
-lamTelBind :: [Name] -> Name -> Tm -> ShowS
-lamTelBind ns x a = bracket ((x++).(" : "++).tm tmp ns a)
 
 lams :: [Name] -> Tm -> ShowS
 lams ns (Lam (fresh ns -> x) i o a t) =
@@ -70,8 +66,6 @@ lams ns (Lam (fresh ns -> x) i o a t) =
         (' ':) . lamBind x i . lams (x:ns) t
       | otherwise ->
         lams (x:ns) t
-lams ns (LamTel (fresh ns -> x) a t) =
-  (' ':) . lamTelBind ns x a . lams (x:ns) t
 lams ns t =
   (". "++) . tm tmp ns t
 
@@ -82,8 +76,6 @@ piBind ns x i a =
 pi :: [Name] -> Tm -> ShowS
 pi ns (Pi (fresh ns -> x) i a b)  | x /= "_" =
   piBind ns x i a . pi (x:ns) b
-pi ns (PiTel (fresh ns -> x) a b) | x /= "_" =
-  piBind ns x Impl a . pi (x:ns) b
 pi ns t = (" → "++) . tm tmp ns t
 
 tm :: Int -> [Name] -> Tm -> ShowS
@@ -102,9 +94,8 @@ tm p ns = go p where
         ("let "++).(x++).(" : "++). go tmp a . (" = "++)
         . go tmp t . (" in "++) . tm tmp (x:ns) u
     t@App{} ->
-      par p appp $ fst $ spine ns t
-    t@AppTel{} ->
-      par p appp $ fst $ spine ns t
+      let (t', _, isAtom) = spine ns t
+      in par p (if isAtom then atomp else appp) t'
 
     Lam x i Inserted a t ->
       showingInsertions $ \case
@@ -135,13 +126,6 @@ tm p ns = go p where
     Tcons t u -> par p recp (go appp t . (" ∷ "++). go recp u)
     Proj1 t   -> par p appp (("π₁ "++). go atomp t)
     Proj2 t   -> par p appp (("π₂ "++). go atomp t)
-
-    PiTel "_" a b ->
-      par p tmp $ go recp a . (" → "++) . tm tmp ("_":ns) b
-    PiTel (fresh ns -> x) a b ->
-      par p tmp $ piBind ns x Impl a . pi (x:ns) b
-    LamTel (fresh ns -> x) a t ->
-      par p tmp $ ("λ"++) . lamTelBind ns x a . lams (x:ns) t
 
     Skip t -> par p appp (("_skip_ "++).tm p ("_":ns) t)
     Wk t   -> par p appp (("_wk_ "++).tm p (tail ns) t)

@@ -8,7 +8,6 @@ import Text.Megaparsec (SourcePos(..), unPos, initialPos)
 import Lens.Micro.Platform
 
 import qualified Data.IntMap.Strict as IM
-import qualified Data.IntSet        as IS
 import Data.Kind
 
 type Dbg = (() :: Constraint)
@@ -80,18 +79,9 @@ deriving instance Show Raw
 -- | Elaboration problem identifier.
 type MId = Int
 
--- | Blocked problems.
-type Blocking  = IS.IntSet
-type BlockedBy = IS.IntSet
-
 data MetaEntry
-  = Unsolved Blocking ~VTy ~StageExp
+  = Unsolved ~VTy ~StageExp
   | Solved Val
-
-  -- | Constancy (Γ, x : Rec A : U i) B   + a list of blocking metas.
-  --   When B becomes constant, A is solved to ε
-  | Constancy Cxt VTy StageExp VTy BlockedBy
-
 
 -- | A partial mapping from levels to levels. Undefined domain represents
 --   out-of-scope variables.
@@ -177,11 +167,6 @@ data Tm
   | Proj1 Tm          -- ^ π₁ t
   | Proj2 Tm          -- ^ π₂ t
 
-  | PiTel Name Ty Ty  -- ^ {x : A⃗} → B
-  | AppTel Ty Tm Tm   -- ^ t {u : A⃗}
-
-  | LamTel Name Ty Tm -- ^ λ{x : A⃗}.t
-
   | U StageExp        -- ^ U i
   | Meta MId          -- ^ α
 
@@ -191,7 +176,6 @@ data Tm
 data Spine
   = SNil
   | SApp Spine ~Val Icit Origin
-  | SAppTel ~Val Spine ~Val
   | SProj1 Spine
   | SProj2 Spine
   | SDown Spine
@@ -223,9 +207,6 @@ data Val
   | VTCons Name ~Val (Val -> Val)
   | VTempty
   | VTcons ~Val ~Val
-
-  | VPiTel Name ~Val (Val -> Val)
-  | VLamTel Name ~Val (Val -> Val)
 
 pattern VVar :: Lvl -> Val
 pattern VVar x = VNe (HVar x) SNil
