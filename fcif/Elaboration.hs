@@ -156,7 +156,7 @@ checkSp = (over _3 reverse <$>) . go . forceSp where
     SProj1 _ -> throwIO SpineProjection
     SProj2 _ -> throwIO SpineProjection
 
--- | Close a type in a cxt by wrapping it in Pi types and explicit weakenings.
+-- | Close a type in a cxt by wrapping it in Pi types and explicit strengthenings.
 closingTy :: Cxt -> Ty -> Ty
 closingTy cxt = go (cxt^.types) (cxt^.names) (cxt^.len) where
   go TNil                  []     d b = b

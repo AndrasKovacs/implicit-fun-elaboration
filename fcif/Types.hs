@@ -147,7 +147,7 @@ data Tm
   | U                 -- ^ U
   | Meta MId          -- ^ α
 
-  | Skip Tm           -- ^ explicit weakening (convenience feature for closing types)
+  | Skip Tm           -- ^ explicit strengthening (convenience feature for closing types)
 
 data Spine
   = SNil
