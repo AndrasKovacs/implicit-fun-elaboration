@@ -64,25 +64,30 @@ sPred s = if s > 0 then s - 1 else error "impossible"
 vApp :: Val -> Val -> Icit -> Origin -> Val
 vApp t u i o = case (t, u) of
   (f@(VLam x i _ a t), !u) -> t u
+  (VLet x a s t u,     v)  -> VLet x a s t (\x -> vApp (u x) v i o)
   (t, u)                   -> VApp t u i o
 
 vProj1 :: Val -> Val
-vProj1 (VTcons t u) = t
-vProj1 t            = VProj1 t
+vProj1 (VTcons t u)     = t
+vProj1 (VLet x a s t u) = VLet x a s t (vProj1 . u)
+vProj1 t                = VProj1 t
 
 vProj2 :: Val -> Val
-vProj2 (VTcons t u) = u
-vProj2 t            = VProj2 t
+vProj2 (VTcons t u)     = u
+vProj2 (VLet x a s t u) = VLet x a s t (vProj2 . u)
+vProj2 t                = VProj2 t
 
 vUp :: Val -> Val
 vUp = \case
-  VDown t -> t
-  t       -> VUp t
+  VDown t        -> t
+  VLet x a s t u -> VLet x a s t (vUp . u)
+  t              -> VUp t
 
 vDown :: Val -> Val
 vDown = \case
-  VUp t -> t
-  t     -> VDown t
+  VUp t          -> t
+  VLet x a s t u -> VLet x a s t (vDown . u)
+  t              -> VDown t
 
 valsTail :: Vals -> Vals
 valsTail = \case

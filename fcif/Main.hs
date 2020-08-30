@@ -149,8 +149,6 @@ main' args src = mainWith (parseOpts args) ((,src) <$> parseString src)
 
 
 test1 = unlines [
-
-
   "λ (Bool  : U 0)",
   "  (true  : Bool)",
   "  (false : Bool)",
@@ -173,7 +171,6 @@ test1 = unlines [
 
   "let id0 : {A : U 0} → A → A = λ x. x in",
   "let kek = id0 U in",
-
 
   "let const : {A B : ^U} → A → B → A = λ x y. x in",
 
@@ -240,6 +237,7 @@ test1 = unlines [
 
   "let test : Nat₀ = expSum (cons₁ n₀5 (cons₁ (add₀ n₀5 n₀10) nil₁)) in",
 
+  "let foo : Nat₀ = lower (add₁ n₁5 (let x : Nat₀ = zero₀ in n₁5)) in",
 
   "U 0"
   ]
