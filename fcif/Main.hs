@@ -67,3 +67,38 @@ main = mainWith getArgs parseStdin
 -- | Run main with inputs as function arguments.
 main' :: String -> String -> IO ()
 main' mode src = mainWith (pure [mode]) ((,src) <$> parseString src)
+
+
+test = unlines [
+  "λ (List   : U → U)",
+  "  (Bool   : U)",
+  "  (ST     : U → U → U)",
+  "  (Pair   : U → U → U)",
+  "  (pair   : {A B} → A → B → Pair A B)",
+  "  (true   : Bool)",
+  "  (Int    : U)",
+  "  (zero   : Int)",
+  "  (inc    : Int → Int)",
+  "  (head   : {A} → List A → A)",
+  "  (tail   : {A} → List A → List A)",
+  "  (nil    : {A} → List A)",
+  "  (cons   : {A} → A → List A → List A)",
+  "  (append : {A} → List A → List A → List A)",
+  "  (length : {A} → List A → Int)",
+  "  (map    : {A B} → (A → B) → List A → List B)",
+  "  (runST  : {A} → ({S} → ST S A) → A)",
+  "  (argST  : {S} → ST S Int).",
+  "let the    : (A : U) → A → A         = λ A a. a in",
+  "let const  : {A B} → A → B → A       = λ x y. x in",
+  "let IdTy   : U                       = {A} → A → A in",
+  "let single : {A} → A → List A        = λ a. cons a nil in",
+  "let id     : {A} → A → A             = λ a. a in",
+  "let ids    : List IdTy               = nil in",
+  "let app    : {A B} → (A → B) → A → B = id in",
+  "let revapp : {A B} → A → (A → B) → B = λ x f. f x in",
+  "let poly   : IdTy → Pair Int Bool    = λ f. pair (f zero) (f true) in",
+  "let choose : {A} → A → A → A         = const in",
+  "let auto   : IdTy → IdTy             = id in",
+  "let auto2  : {B} → IdTy → B → B      = λ _ b. b in",
+  "U"
+  ]

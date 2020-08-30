@@ -58,10 +58,6 @@ data MetaEntry
   = Unsolved Blocking ~VTy
   | Solved Val
 
-  -- | Constancy (Γ, x : Rec A) B   + a list of blocking metas.
-  --   When B becomes constant, A is solved to ε
-  | Constancy Cxt VTy VTy BlockedBy
-
 
 -- | A partial mapping from levels to levels. Undefined domain represents
 --   out-of-scope variables.
@@ -122,39 +118,18 @@ data Cxt = Cxt {
   cxtLen        :: Int}
 
 data Tm
-  = Var Ix             -- ^ x
-  | Let Name Ty Tm Tm  -- ^ let x : A = t in u
-
+  = Var Ix              -- ^ x
+  | Let Name Ty Tm Tm   -- ^ let x : A = t in u
   | Pi Name Icit Ty Ty  -- ^ (x : A) → B)  or  {x : A} → B
   | Lam Name Icit Ty Tm -- ^ λ(x : A).t  or  λ{x : A}.t
   | App Tm Tm Icit      -- ^ t u  or  t {u}
-
-  | Tel               -- ^ Tel
-  | TEmpty            -- ^ ε
-  | TCons Name Ty Ty  -- ^ (x : A) ▷ B
-  | Rec Tm            -- ^ Rec A
-
-  | Tempty            -- ^ []
-  | Tcons Tm Tm       -- ^ t :: u
-  | Proj1 Tm          -- ^ π₁ t
-  | Proj2 Tm          -- ^ π₂ t
-
-  | PiTel Name Ty Ty  -- ^ {x : A⃗} → B
-  | AppTel Ty Tm Tm   -- ^ t {u : A⃗}
-
-  | LamTel Name Ty Tm -- ^ λ{x : A⃗}.t
-
-  | U                 -- ^ U
-  | Meta MId          -- ^ α
-
-  | Skip Tm           -- ^ explicit strengthening (convenience feature for closing types)
+  | U                   -- ^ U
+  | Meta MId            -- ^ α
+  | Skip Tm             -- ^ explicit strengthening (convenience feature for closing types)
 
 data Spine
   = SNil
   | SApp Spine ~Val Icit
-  | SAppTel ~Val Spine ~Val
-  | SProj1 Spine
-  | SProj2 Spine
 
 valsLen :: Vals -> Int
 valsLen = go 0 where
@@ -169,20 +144,9 @@ data Head
 
 data Val
   = VNe Head Spine
-
   | VPi Name Icit ~VTy (VTy -> VTy)
   | VLam Name Icit ~VTy (Val -> Val)
   | VU
-
-  | VTel
-  | VRec ~Val
-  | VTEmpty
-  | VTCons Name ~Val (Val -> Val)
-  | VTempty
-  | VTcons ~Val ~Val
-
-  | VPiTel Name ~Val (Val -> Val)
-  | VLamTel Name ~Val (Val -> Val)
 
 pattern VVar :: Lvl -> Val
 pattern VVar x = VNe (HVar x) SNil
