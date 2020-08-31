@@ -12,6 +12,7 @@ import Elaboration
 import Errors
 import Parser
 import ElabState
+import Pretty
 import Zonk
 
 helpMsg :: String
@@ -42,7 +43,8 @@ mainWith getOpt getTm = do
       elab = do
         reset
         (t, src) <- getTm
-        (t, a) <- inferTopLams emptyCxt t `catch` displayError src
+        (t, a) <- inferTop emptyCxt t `catch` displayError src
+        checkAll 0
         t <- pure $ zonk VNil t
         let ~nt = quote 0 $ eval VNil t
         let ~na = quote 0 a
@@ -52,13 +54,14 @@ mainWith getOpt getTm = do
     ["--help"] -> putStrLn helpMsg
     ["nf"] -> do
       (t, nt, na) <- elab
-      putStrLn $ show nt
+      putStrLn $ showTopTm nt
     ["type"] -> do
       (t, nt, na) <- elab
-      putStrLn $ show na
+      putStrLn $ showTopTm na
     ["elab"] -> do
       (t, nt, na) <- elab
-      putStrLn $ show t
+      putStrLn $ showTopTm t
+
     _ -> putStrLn helpMsg
 
 main :: IO ()
@@ -67,7 +70,6 @@ main = mainWith getArgs parseStdin
 -- | Run main with inputs as function arguments.
 main' :: String -> String -> IO ()
 main' mode src = mainWith (pure [mode]) ((,src) <$> parseString src)
-
 
 test = unlines [
   "λ (List   : U → U)",
@@ -100,5 +102,37 @@ test = unlines [
   "let choose : {A} → A → A → A         = const in",
   "let auto   : IdTy → IdTy             = id in",
   "let auto2  : {B} → IdTy → B → B      = λ _ b. b in",
+  "let A1 = λ x y. y in",
+  "let A2 : IdTy → IdTy = choose id in",
+  "let A3 = choose nil ids in",
+  "let A4 = λ (x : IdTy). x x in",
+  "let A5 : IdTy → IdTy = id auto in",
+  "let A6 : {B} → IdTy → B → B = id auto2 in",
+  "let A7 = choose id auto in",
+  "let A9 : ({A} → (A → A) → List A → A) → IdTy",
+  "    = λ f. f (choose id) ids in",
+  "let A10 = poly id in",
+  "let A11 = poly (λ x. x) in",
+  "let A12 = id poly (λ x. x) in",
+  "let C1 = length ids in",
+  "let C2 = tail ids in",
+  "let C3 : IdTy = head ids in",
+  "let C4 : List IdTy = single id in",
+  "let C5 = cons id ids in",
+  "let C6 = cons (λ x. x) ids in",
+  "let C7 = append (single inc) (single id) in",
+  "let C8 : _ → IdTy = λ (g : {A} → List A → List A → A). g (single id) ids in",
+  "let C9 = map poly (single id) in",
+  "let C10 = map head (single ids) in",
+  "let D1 = app poly id in",
+  "let D2 = revapp id poly in",
+  "let D3 = runST argST in",
+  "let D4 = app runST argST in",
+  "let D5 = revapp argST runST in",
+  "let E2 =",
+  "  λ (h : Int → {A} → A → A)(k : {A} → A → List A → A)(lst : List ({A} → Int → A → A)).",
+  "  k (λ x. h x) lst in",
+  "let E3 =",
+  "  λ (r : ({A} → A → {B} → B → B) → Int). r (λ x y. y) in  ",
   "U"
   ]

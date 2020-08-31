@@ -52,12 +52,20 @@ type MId = Int
 
 -- | Blocked problems.
 type Blocking  = IS.IntSet
-type BlockedBy = IS.IntSet
 
 data MetaEntry
+    -- | Unsolved meta which may block Unchecked entries.
   = Unsolved Blocking ~VTy
   | Solved Val
+    -- | In (Unchecked Γ t A res), we postpone checking t in Γ with A. After
+    --   performing checking, we have to unify the result with res, which
+    --   stands for the result of checking.
+  | Unchecked Cxt Raw VTy Val
+    -- | An Unchecked becomes Checked after solution, and we only need to record
+    --   the elaboration result. This gets inlined into the syntax when we do zonking.
+  | Checked Tm
 
+type MCxt = IM.IntMap MetaEntry
 
 -- | A partial mapping from levels to levels. Undefined domain represents
 --   out-of-scope variables.
@@ -90,7 +98,6 @@ type Ix    = Int
 type Lvl   = Int
 type Ty    = Tm
 type VTy   = Val
-type MCxt  = IM.IntMap MetaEntry
 
 -- | Extending `Types` with any type.
 pattern TSnoc :: Types -> VTy -> Types
@@ -98,8 +105,8 @@ pattern TSnoc as a <- ((\case TBound as a -> Just (as, a)
                               TDef as a   -> Just (as, a)
                               TNil        -> Nothing) -> Just (as, a))
 
-lvlName :: [Name] -> Lvl -> Name
-lvlName ns x = ns !! (length ns - x - 1)
+lvlName :: Cxt -> Lvl -> Name
+lvlName cxt x = cxtNames cxt !! (cxtLen cxt - x - 1)
 
 -- | We need to distinguish invented names from source names, as
 --   we don't want the former to shadow the latter during name lookup
@@ -117,15 +124,19 @@ data Cxt = Cxt {
   cxtNameOrigin :: [NameOrigin],
   cxtLen        :: Int}
 
+instance Show Cxt where show = show . cxtNames
+
 data Tm
-  = Var Ix              -- ^ x
-  | Let Name Ty Tm Tm   -- ^ let x : A = t in u
-  | Pi Name Icit Ty Ty  -- ^ (x : A) → B)  or  {x : A} → B
-  | Lam Name Icit Ty Tm -- ^ λ(x : A).t  or  λ{x : A}.t
-  | App Tm Tm Icit      -- ^ t u  or  t {u}
-  | U                   -- ^ U
-  | Meta MId            -- ^ α
-  | Skip Tm             -- ^ explicit strengthening (convenience feature for closing types)
+  = Var Ix                -- ^ x
+  | Let Name Ty Tm Tm     -- ^ let x : A = t in u
+  | Pi Name Icit Ty Ty    -- ^ (x : A) → B)  or  {x : A} → B
+  | Lam Name Icit Ty Tm   -- ^ λ(x : A).t  or  λ{x : A}.t
+  | App Tm Tm Icit        -- ^ t u  or  t {u}
+  | U                     -- ^ U
+  | Check MId Tm          -- ^ Postponed checking problem, with MId problem identifier, and
+                          --   Tm a fresh meta spine represnting eventual checking result.
+  | Meta MId              -- ^ α
+  | Skip Tm               -- ^ explicit strengthening (convenience feature for closing types)
 
 data Spine
   = SNil

@@ -8,6 +8,7 @@ module ElabState where
 import Data.IORef
 import System.IO.Unsafe
 import qualified Data.IntMap.Strict as IM
+import qualified Data.IntSet as IS
 
 import Types
 
@@ -40,6 +41,11 @@ modifyMeta m f = alterMeta m (maybe (error "impossible") (Just . f))
 
 writeMeta :: MId -> MetaEntry -> IO ()
 writeMeta m e = modifyMeta m (const e)
+
+addBlocking :: MId -> MId -> IO ()
+addBlocking blocked blocks = modifyMeta blocks $ \case
+  Unsolved bs a -> Unsolved (IS.insert blocked bs) a
+  _             -> error "impossible"
 
 newMeta :: MetaEntry -> IO MId
 newMeta e = do

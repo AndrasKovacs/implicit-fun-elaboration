@@ -17,7 +17,11 @@ zonk vs t = go t where
                       _        -> Right (Meta m)
     App t u ni   -> case goSp t of
                       Left t  -> Left (vApp t (eval vs u) ni)
-                      Right t -> Right $ App t (go u) ni
+                      Right t -> Right $! App t (go u) ni
+    Check m t    -> case runLookupMeta m of
+                      Checked t   -> Right $! go t
+                      Unchecked{} -> goSp t
+                      _           -> error "impossible"
     t            -> Right (zonk vs t)
 
   goBind = zonk (VSkip vs)
@@ -36,3 +40,7 @@ zonk vs t = go t where
     Lam x i a t  -> Lam x i (go a) (goBind t)
     Let x a t u  -> Let x (go a) (go t) (goBind u)
     Skip t       -> Skip (goBind t)
+    Check m t    -> case runLookupMeta m of
+                      Checked t   -> go t
+                      Unchecked{} -> go t
+                      _           -> error "impossible"

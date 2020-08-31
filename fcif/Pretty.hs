@@ -1,9 +1,12 @@
 {-# options_ghc -Wno-orphans #-}
 
-module Pretty (showTm, showTopTm) where
+module Pretty (showTm, showTopTm, dbgTm, dbgVal) where
 
 import Prelude hiding (pi)
+import Lens.Micro.Platform
+
 import Types
+import Evaluation
 
 -- | Wrap in parens if expression precedence is lower than
 --   enclosing expression precedence.
@@ -78,29 +81,36 @@ tm p ns = \case
   Pi (fresh ns -> x) i a b ->
     par tmp p $ piBind ns x i a . pi (x:ns) b
 
-  U      -> ("U"++)
-  Skip t -> tm p ("_":ns) t
+  Check m t -> tm p ns t
+  U         -> ("U"++)
+  Skip t    -> tm p ("_":ns) t
 
 -- | We specialcase printing of top lambdas, since they are usually used
 --   to postulate stuff. We use '*' in a somewhat hacky way to mark
 --   names bound in top lambdas, so that later we can avoid printing
 --   them in meta spines.
-showTopTm :: Tm -> String
-showTopTm t = top "λ" "" [] t [] where
-  top :: String -> String -> [Name] -> Tm -> ShowS
-  top pre post ns (Lam (fresh ns -> x) i a t) =
-      (pre++)
-    . icit i bracket (showParen True) (
-           ((if null x then "_" else x)++) . (" : "++) . tm tmp ns a)
-    . top "\n " ".\n\n" (('*':x):ns) t -- note the '*'
-  top pre post ns (Let (fresh ns -> x) a t u) =
-      (post++)
-    . ("let "++).(x++).(" : "++). tm tmp ns a . ("\n    = "++)
-    . tm tmp ns t . ("\nin\n"++) . top "\nλ" "" (x:ns) u
-  top pre post ns t = (post++) . tm tmp ns t
+top :: String -> String -> [Name] -> Tm -> ShowS
+top pre post ns (Lam (fresh ns -> x) i a t) =
+    (pre++)
+  . icit i bracket (showParen True) (
+         ((if null x then "_" else x)++) . (" : "++) . tm tmp ns a)
+  . top "\n " ".\n\n" (('*':x):ns) t -- note the '*'
+top pre post ns (Let (fresh ns -> x) a t u) =
+    (post++)
+  . ("let "++).(x++).(" : "++). tm tmp ns a . ("\n    = "++)
+  . tm tmp ns t . ("\nin\n"++) . top "\nλ" "" (x:ns) u
+top pre post ns t = (post++) . tm tmp ns t
 
-showTm :: [Name] -> Tm -> String
-showTm ns t = tm tmp ns t []
--- showTm ns t = show t
--- deriving instance Show Tm
-instance Show Tm where show = showTopTm
+showTm :: Cxt -> Tm -> String
+showTm cxt t = tm tmp (cxt^.names) t []
+
+showTopTm :: Tm -> String
+showTopTm t = top "λ" "" [] t []
+
+deriving instance Show Tm
+
+dbgVal :: Cxt -> Val -> String
+dbgVal cxt v = showTm cxt (quote (cxt^.len) v)
+
+dbgTm :: Cxt -> Tm -> String
+dbgTm = showTm
