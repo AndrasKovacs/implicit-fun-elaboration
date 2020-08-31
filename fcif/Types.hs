@@ -1,14 +1,18 @@
+{-# language ConstraintKinds #-}
 
 module Types (
   module Types,
-  module Text.Megaparsec
+  module Text.Megaparsec,
   ) where
 
 import Text.Megaparsec (SourcePos(..), unPos, initialPos)
 import Lens.Micro.Platform
+import GHC.Stack
 
 import qualified Data.IntMap.Strict as IM
 import qualified Data.IntSet        as IS
+
+type Dbg = HasCallStack
 
 -- Raw syntax
 --------------------------------------------------------------------------------
@@ -56,11 +60,11 @@ type Blocking  = IS.IntSet
 data MetaEntry
     -- | Unsolved meta which may block Unchecked entries.
   = Unsolved Blocking ~VTy
-  | Solved Val
+  | Solved ~Val
     -- | In (Unchecked Γ t A res), we postpone checking t in Γ with A. After
     --   performing checking, we have to unify the result with res, which
     --   stands for the result of checking.
-  | Unchecked Cxt Raw VTy Val
+  | Unchecked Cxt Raw VTy (MId, Spine)
     -- | An Unchecked becomes Checked after solution, and we only need to record
     --   the elaboration result. This gets inlined into the syntax when we do zonking.
   | Checked Tm

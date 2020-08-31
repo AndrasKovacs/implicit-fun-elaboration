@@ -1,4 +1,5 @@
 
+
 module Elaboration where
 
 import Control.Exception
@@ -9,12 +10,14 @@ import Data.IORef
 import qualified Data.IntMap as IM
 import qualified Data.IntSet as IS
 
+
 import Types
 import Evaluation
 import ElabState
 import Errors
 
 -- import Debug.Trace
+
 
 -- Context operations
 --------------------------------------------------------------------------------
@@ -157,16 +160,39 @@ strengthen str = go where
     SNil           -> pure h
     SApp sp u i    -> App <$> goSp h sp <*> go u <*> pure i
 
-retryCheck :: MId -> IO ()
+-- | Unify the result of a postponed checking with its representative
+--   metavariable.
+unifyUncheckedRes :: Dbg => Cxt -> Tm -> (MId, Spine) -> IO ()
+unifyUncheckedRes cxt t (m, sp) =
+  lookupMeta m >>= \case
+
+    -- If the postponed term is unconstrained and doesn't block anything,
+    -- solving its meta cannot fail, so we solve it lazily. If nothing depends
+    -- on this solution, it's never computed.
+    Unsolved bs a | IS.null bs -> do
+      let ~solution =
+            -- traceShow ("force postponed", m) $
+            runIO (getSolution cxt bs a m sp (eval (cxt^.vals) t))
+      writeMeta m (Solved solution)
+      -- traceShowM ("postponed thunk", m)
+
+    Unsolved _ _ ->
+      unify cxt (eval (cxt^.vals) t) (force (VNe (HMeta m) sp))
+    Solved{} ->
+      unify cxt (eval (cxt^.vals) t) (force (VNe (HMeta m) sp))
+    _ ->
+      error "impossible"
+
+retryCheck :: Dbg => MId -> IO ()
 retryCheck m = lookupMeta m >>= \case
-  Unchecked cxt t a res -> do
+  Unchecked cxt t a res@(_, _) -> do
     -- traceShowM ("resume", m, t)
     case force a of
       VNe (HMeta m') sp ->
         addBlocking m m'
       a -> do
         t <- check cxt t a
-        unify cxt (eval (cxt^.vals) t) res
+        unifyUncheckedRes cxt t res
         -- traceShowM ("checked", m)
         writeMeta m $ Checked t
 
@@ -180,16 +206,14 @@ checkAll m = do
     lookupMeta m >>= \case
       Unchecked cxt t topA res -> do
         (t, va) <- insert cxt $ infer cxt t
-        unifyWhile cxt va topA
-        unify cxt (eval (cxt^.vals) t) res
         writeMeta m (Checked t)
+        unifyWhile cxt va topA
+        unifyUncheckedRes cxt t res
       _ -> pure ()
     checkAll (m + 1)
 
--- | May throw `UnifyError`.
-solveMeta :: Cxt -> MId -> Spine -> Val -> IO ()
-solveMeta cxt m sp rhs = do
-
+getSolution :: Cxt -> Blocking -> VTy -> MId -> Spine -> Val -> IO Val
+getSolution cxt blocked metaTy m sp rhs = do
   -- these normal forms are only used in error reporting
   let ~topLhs = quote (cxt^.len) (VNe (HMeta m) sp)
       ~topRhs = quote (cxt^.len) rhs
@@ -202,20 +226,21 @@ solveMeta cxt m sp rhs = do
   rhs <- strengthen (Str spLen (cxt^.len) ren (Just m)) rhs
          `catch` (throwIO . StrengtheningError cxt topLhs topRhs)
 
+  let spVarNames = map (lvlName cxt) spVars
+  let closedRhs  = closingTm (metaTy, spLen, spVarNames) rhs
+  let ~res = eval VNil closedRhs
+  pure res
+
+-- | May throw `UnifyError`.
+solveMeta :: Dbg => Cxt -> MId -> Spine -> Val -> IO ()
+solveMeta cxt m sp rhs = do
   (blocked, metaTy) <- lookupMeta m >>= \case
     Unsolved blocked a -> pure (blocked, a)
     _                  -> error "impossible"
+  solution <- getSolution cxt blocked metaTy m sp rhs
+  writeMeta m (Solved solution)
 
-  -- register solution
-  let spVarNames = map (lvlName cxt) spVars
-  let closedRhs = closingTm (metaTy, spLen, spVarNames) rhs
-  writeMeta m (Solved (eval VNil closedRhs))
-
-  -- traceShowM ("solved", m)
-
-  -- retry every blocked problem
   forM_ (IS.toList blocked) retryCheck
-
 
 -- | Create a fresh meta with given type, return
 --   the meta applied to all bound variables.
@@ -234,14 +259,14 @@ freshMeta cxt (quote (cxt^.len) -> a) = do
 
 -- | Wrap the inner `UnifyError` arising from unification in an `UnifyErrorWhile`.
 --   This decorates an error with one additional piece of context.
-unifyWhile :: Cxt -> Val -> Val -> IO ()
+unifyWhile :: Dbg => Cxt -> Val -> Val -> IO ()
 unifyWhile cxt l r =
   unify cxt l r
   `catch`
   (report cxt . UnifyErrorWhile (quote (cxt^.len) l) (quote (cxt^.len) r))
 
 -- | May throw `UnifyError`.
-unify :: Cxt -> Val -> Val -> IO ()
+unify :: Dbg => Cxt -> Val -> Val -> IO ()
 unify cxt l r = go l r where
 
   unifyError =
@@ -253,6 +278,7 @@ unify cxt l r = go l r where
       Left{}  -> solveMeta cxt m' sp' (VNe (HMeta m) sp)
       Right{} -> solveMeta cxt m sp (VNe (HMeta m') sp')
 
+  go :: Dbg => Val -> Val -> IO ()
   go t t' = case (force t, force t') of
     (VLam x _ a t, VLam _ _ _ t')            -> goBind x a t t'
     (VLam x i a t, t')                       -> goBind x a t (\ ~v -> vApp t' v i)
@@ -321,8 +347,10 @@ check cxt topT ~topA = case (topT, force topA) of
 
     -- create fresh meta for checking result
     res <- freshMeta cxt topA
+    let VNe (HMeta m') sp = eval (cxt^.vals) res
+
     -- create fresh checking problem
-    chk <- newMeta $ Unchecked cxt t topA (eval (cxt^.vals) res)
+    chk <- newMeta $ Unchecked cxt t topA (m' , sp)
     -- add chk to blocked set
     addBlocking chk m
 

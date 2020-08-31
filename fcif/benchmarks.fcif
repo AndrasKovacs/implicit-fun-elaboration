@@ -49,110 +49,115 @@ let choose : {A} → A → A → A         = const in
 let auto   : IdTy → IdTy             = id in
 let auto2  : {B} → IdTy → B → B      = λ _ b. b in
 
-
--- Table
---------------------------------------------------------------------------------
-
--- A: polymorphic instantiation
---------------------------------------------------------------------------------
-
--- No generalization
-let A1 = λ x y. y in
-
--- No generalization
-let A2 : IdTy → IdTy = choose id in
-
-let A3 = choose nil ids in
-
--- No generalization
-let A4 : IdTy → IdTy = λ (x : IdTy). x x in
-
-let A5 = id auto in
-
--- No generalization
-let A6 : {B} → IdTy → B → B = id auto2 in
-
-let A7 = choose id auto in
-
--- let A8 = choose id auto2 in -- FAILS the reason is simply that the types are
---   definitionally different, the orders of implicit args do not match. FCIF
---   does *not* reorder or float out implicit args, intentionally, since we
---   support mixing implicit and explicit args in arbitrary order.
-
--- No generalization
-let A9 : ({A} → (A → A) → List A → A) → IdTy
-    = λ f. f (choose id) ids in
-
-let A10 = poly id in
-
-let A11 = poly (λ x. x) in
-
-let A12 = id poly (λ x. x) in
-
--- B: inference of polymorphic arguments
---------------------------------------------------------------------------------
-
--- FAILS
--- let B1 = λ f. pair (f zero) (f true) in
-
--- FAILS
--- let B2 = λ xs. poly (head xs) in
-  -- however, it could possibly work with telescope application insertion + postponing
+let foo : IdTy = λ x. x in
+let bar : List IdTy = cons foo nil in
 
 
--- C: functions on polymorphic lists
---------------------------------------------------------------------------------
 
-let C1 = length ids in
 
-let C2 = tail ids in
+-- -- Table
+-- --------------------------------------------------------------------------------
 
--- No generalization
-let C3 : IdTy = head ids in
+-- -- A: polymorphic instantiation
+-- --------------------------------------------------------------------------------
 
--- No generalization
-let C4 : List IdTy = single id in
+-- -- No generalization
+-- let A1 = λ x y. y in
 
-let C5 = cons id ids in
+-- -- No generalization
+-- let A2 : IdTy → IdTy = choose id in
 
-let C6 = cons (λ x. x) ids in
+-- let A3 = choose nil ids in
 
-let C7 = append (single inc) (single id) in
+-- -- No generalization
+-- let A4 : IdTy → IdTy = λ (x : IdTy). x x in
 
--- No generalization
-let C8 : _ → IdTy = λ (g : {A} → List A → List A → A). g (single id) ids in
+-- let A5 = id auto in
 
-let C9 = map poly (single id) in
+-- -- No generalization
+-- let A6 : {B} → IdTy → B → B = id auto2 in
 
-let C10 = map head (single ids) in
+-- let A7 = choose id auto in
 
--- D: application functions
---------------------------------------------------------------------------------
+-- -- let A8 = choose id auto2 in -- FAILS the reason is simply that the types are
+-- --   definitionally different, the orders of implicit args do not match. FCIF
+-- --   does *not* reorder or float out implicit args, intentionally, since we
+-- --   support mixing implicit and explicit args in arbitrary order.
 
-let D1 = app poly id in
+-- -- No generalization
+-- let A9 : ({A} → (A → A) → List A → A) → IdTy
+--     = λ f. f (choose id) ids in
 
-let D2 = revapp id poly in
+-- let A10 = poly id in
 
-let D3 = runST argST in
+-- let A11 = poly (λ x. x) in
 
-let D4 = app runST argST in
+-- let A12 = id poly (λ x. x) in
 
-let D5 = revapp argST runST in
+-- -- B: inference of polymorphic arguments
+-- --------------------------------------------------------------------------------
 
--- E: η-expansion
---------------------------------------------------------------------------------
+-- -- FAILS
+-- -- let B1 = λ f. pair (f zero) (f true) in
 
--- let E1 =   -- FAILS
+-- -- FAILS
+-- -- let B2 = λ xs. poly (head xs) in
+--   -- however, it could possibly work with telescope application insertion + postponing
+
+
+-- -- C: functions on polymorphic lists
+-- --------------------------------------------------------------------------------
+
+-- let C1 = length ids in
+
+-- let C2 = tail ids in
+
+-- -- No generalization
+-- let C3 : IdTy = head ids in
+
+-- -- No generalization
+-- let C4 : List IdTy = single id in
+
+-- let C5 = cons id ids in
+
+-- let C6 = cons (λ x. x) ids in
+
+-- let C7 = append (single inc) (single id) in
+
+-- -- No generalization
+-- let C8 : _ → IdTy = λ (g : {A} → List A → List A → A). g (single id) ids in
+
+-- let C9 = map poly (single id) in
+
+-- let C10 = map head (single ids) in
+
+-- -- D: application functions
+-- --------------------------------------------------------------------------------
+
+-- let D1 = app poly id in
+
+-- let D2 = revapp id poly in
+
+-- let D3 = runST argST in
+
+-- let D4 = app runST argST in
+
+-- let D5 = revapp argST runST in
+
+-- -- E: η-expansion
+-- --------------------------------------------------------------------------------
+
+-- -- let E1 =   -- FAILS
+-- --   λ (h : Int → {A} → A → A)(k : {A} → A → List A → A)(lst : List ({A} → Int → A → A)).
+-- --   k h lst in
+-- --   -- fails again because of mismatched implicit/explicit arguments
+
+-- -- No generalization
+-- let E2 =
 --   λ (h : Int → {A} → A → A)(k : {A} → A → List A → A)(lst : List ({A} → Int → A → A)).
---   k h lst in
---   -- fails again because of mismatched implicit/explicit arguments
+--   k (λ x. h x) lst in
 
--- No generalization
-let E2 =
-  λ (h : Int → {A} → A → A)(k : {A} → A → List A → A)(lst : List ({A} → Int → A → A)).
-  k (λ x. h x) lst in
-
-let E3 =
-  λ (r : ({A} → A → {B} → B → B) → Int). r (λ x y. y) in
+-- let E3 =
+--   λ (r : ({A} → A → {B} → B → B) → Int). r (λ x y. y) in
 
 U

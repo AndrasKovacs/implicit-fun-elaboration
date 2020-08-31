@@ -23,14 +23,14 @@ nextMId :: IORef Int
 nextMId = runIO (newIORef 0)
 {-# noinline nextMId #-}
 
-lookupMeta :: MId -> IO MetaEntry
+lookupMeta :: Dbg => MId -> IO MetaEntry
 lookupMeta m = do
   ms <- readIORef mcxt
   case IM.lookup m ms of
     Just e -> pure e
     _      -> error "impossible"
 
-runLookupMeta :: MId -> MetaEntry
+runLookupMeta :: Dbg => MId -> MetaEntry
 runLookupMeta m = runIO (lookupMeta m)
 
 alterMeta :: MId -> (Maybe MetaEntry -> Maybe MetaEntry) -> IO ()
