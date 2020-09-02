@@ -49,8 +49,8 @@ let choose : {A} → A → A → A         = const in
 let auto   : IdTy → IdTy             = id in
 let auto2  : {B} → IdTy → B → B      = λ _ b. b in
 
-let foo : IdTy = λ x. x in
-let bar : List IdTy = cons foo nil in
+let foo = λ x. x in
+let bar : List IdTy = append (single foo) nil in
 
 
 

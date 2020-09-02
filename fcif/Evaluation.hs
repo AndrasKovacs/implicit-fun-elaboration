@@ -30,10 +30,22 @@ vApp (VLam _ _ _ t)  ~u i = t u
 vApp (VNe h sp)      ~u i = VNe h (SApp sp u i)
 vApp _                _ _ = error "impossible"
 
+vProj1 :: Val -> Val
+vProj1 (VPair t u) = t
+vProj1 (VNe h sp)  = VNe h (SProj1 sp)
+vProj1 _           = error "impossible"
+
+vProj2 :: Val -> Val
+vProj2 (VPair t u) = u
+vProj2 (VNe h sp)  = VNe h (SProj2 sp)
+vProj2 _           = error "impossible"
+
 vAppSp :: Val -> Spine -> Val
-vAppSp h = go where
+vAppSp ~h = go where
   go SNil             = h
   go (SApp sp u i)    = vApp (go sp) u i
+  go (SProj1 sp)      = vProj1 (go sp)
+  go (SProj2 sp)      = vProj2 (go sp)
 
 eval :: Vals -> Tm -> Val
 eval vs = go where
@@ -45,6 +57,10 @@ eval vs = go where
     Pi x i a b   -> VPi x i (go a) (goBind b)
     Lam x i a t  -> VLam x i (go a) (goBind t)
     App t u i    -> vApp (go t) (go u) i
+    Ex x a b     -> VEx x (go a) (goBind b)
+    Pair t u     -> VPair (go t) (go u)
+    Proj1 t      -> vProj1 (go t)
+    Proj2 t      -> vProj2 (go t)
     Skip t       -> eval (VSkip vs) t
     Check _ t    -> eval vs t
 
@@ -60,10 +76,14 @@ quote d = go where
             HMeta m -> Meta m
             HVar x  -> Var (d - x - 1)
           goSp (SApp sp u i) = App (goSp sp) (go u) i
+          goSp (SProj1 sp)   = Proj1 (goSp sp)
+          goSp (SProj2 sp)   = Proj2 (goSp sp)
       in goSp sp
 
     VLam x i a t  -> Lam x i (go a) (goBind t)
     VPi x i a b   -> Pi x i (go a) (goBind b)
+    VEx x a b     -> Ex x (go a) (goBind b)
+    VPair t u     -> Pair (go t) (go u)
     VU            -> U
 
   goBind t = quote (d + 1) (t (VVar d))

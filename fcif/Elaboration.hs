@@ -10,7 +10,6 @@ import Data.IORef
 import qualified Data.IntMap as IM
 import qualified Data.IntSet as IS
 
-
 import Types
 import Evaluation
 import ElabState
@@ -63,6 +62,8 @@ checkSp = (over _3 reverse <$>) . go where
         VVar x | IM.member x r -> throwIO $ NonLinearSpine x
                | otherwise     -> pure (IM.insert x d r, d + 1, x:xs)
         _      -> throwIO SpineNonVar
+    SProj1 sp -> throwIO SpineProjection
+    SProj2 sp -> throwIO SpineProjection
 
 -- | Close a type in a cxt by wrapping it in Pi types and explicit strengthenings.
 closingTy :: Cxt -> Ty -> Ty
@@ -152,6 +153,8 @@ strengthen str = go where
 
     VPi x i a b      -> Pi x i <$> go a <*> goBind b
     VLam x i a t     -> Lam x i <$> go a <*> goBind t
+    VEx x a b        -> Ex x <$> go a <*> goBind b
+    VPair t u        -> Pair <$> go t <*> go u
     VU               -> pure U
 
   goBind t = strengthen (liftStr str) (t (VVar (str^.cod)))
@@ -159,6 +162,8 @@ strengthen str = go where
   goSp h = \case
     SNil           -> pure h
     SApp sp u i    -> App <$> goSp h sp <*> go u <*> pure i
+    SProj1 sp      -> Proj1 <$> goSp h sp
+    SProj2 sp      -> Proj2 <$> goSp h sp
 
 -- | Unify the result of a postponed checking with its representative
 --   metavariable.
@@ -303,7 +308,7 @@ unify cxt l r = go l r where
 -- Elaboration
 --------------------------------------------------------------------------------
 
--- | Insert fresh implicit applications.
+-- | Insert fresh implicit application/projections.
 insert' :: Cxt -> IO (Tm, VTy) -> IO (Tm, VTy)
 insert' cxt act = do
   (t, va) <- act
@@ -312,19 +317,21 @@ insert' cxt act = do
           m <- freshMeta cxt a
           let mv = eval (cxt^.vals) m
           go (App t m Impl) (b mv)
+        VEx x a b -> do
+          go (Proj2 t) (b (eval (cxt^.vals) (Proj1 t)))
         va -> pure (t, va)
   go t va
 
--- | Insert fresh implicit applications to a term which is not
---   an implicit lambda (i.e. neutral).
+-- | Insert fresh implicit applications/projection to a neutral term.
 insert :: Cxt -> IO (Tm, VTy) -> IO (Tm, VTy)
 insert cxt act = act >>= \case
   (t@(Lam _ Impl _ _), va) -> pure (t, va)
+  (t@(Pair _ _)      , va) -> pure (t, va)
   (t                 , va) -> insert' cxt (pure (t, va))
 
 check :: Cxt -> Raw -> VTy -> IO Tm
 check cxt topT ~topA = case (topT, force topA) of
-  (RSrcPos p t, a) ->
+  (RSrcPos p t, a) -> do
     addSrcPos p (check cxt t a)
 
   (RLam x ann i t, VPi x' i' a b) | i == i' -> do
@@ -338,13 +345,35 @@ check cxt topT ~topA = case (topT, force topA) of
     t <- check (bind x NOSource a cxt) t (b (VVar (cxt^.len)))
     pure $ Lam x i ann t
 
+  -- a small but generally useful approximation of polymorphic variable type inference
+  (RVar x, topA@(VPi _ Impl _ _))
+    | Just (x, force -> a@(VNe (HMeta _) _)) <- lookupVar cxt x -> do
+    unifyWhile cxt a topA
+    pure x
+
+  -- a small but generally useful approximation of polymorphic variable type inference
+  (RVar x, topA@(VEx _ _ _))
+    | Just (x, force -> a@(VNe (HMeta _) _)) <- lookupVar cxt x -> do
+    unifyWhile cxt a topA
+    pure x
+
   (t, VPi x Impl a b) -> do
     t <- check (bind x NOInserted a cxt) t (b (VVar (cxt^.len)))
     pure $ Lam x Impl (quote (cxt^.len) a) t
 
+  (RPair t u, VEx x a b) -> do
+    t <- check cxt t a
+    u <- check cxt u (b (VVar (cxt^.len)))
+    pure $ Pair t u
+
+  (t, VEx x a b) -> do
+    p1 <- freshMeta cxt a
+    t  <- check cxt t (b (eval (cxt^.vals) p1))
+    pure $ Pair p1 t
+
+  -- postpone checking
   (t, topA@(VNe (HMeta m) sp)) -> do
     -- traceShowM ("postpone", t)
-
     -- create fresh meta for checking result
     res <- freshMeta cxt topA
     let VNe (HMeta m') sp = eval (cxt^.vals) res
@@ -399,19 +428,26 @@ inferTop cxt = \case
   t ->
     insert cxt $ infer cxt t
 
+lookupVar :: Cxt -> Name -> Maybe (Tm, VTy)
+lookupVar cxt x =
+  let go :: [Name] -> [NameOrigin] -> Types -> Int -> Maybe (Tm, VTy)
+      go (y:xs) (NOSource:os) (TSnoc _  a) i | x == y || ('*':x) == y = Just (Var i, a)
+      go (_:xs) (_       :os) (TSnoc as _) i = go xs os as (i + 1)
+      go []     []            TNil         _ = Nothing
+      go _ _ _ _ = error "impossible"
+  in go (cxt^.names) (cxt^.nameOrigin) (cxt^.types) 0
+
 infer :: Cxt -> Raw -> IO (Tm, VTy)
 infer cxt = \case
-  RSrcPos p t -> addSrcPos p $ infer cxt t
+  RSrcPos p t -> do
+    addSrcPos p $ infer cxt t
 
   RU -> pure (U, VU)
 
   RVar x -> do
-    let go :: [Name] -> [NameOrigin] -> Types -> Int -> IO (Tm, VTy)
-        go (y:xs) (NOSource:os) (TSnoc _  a) i | x == y || ('*':x) == y = pure (Var i, a)
-        go (_:xs) (_       :os) (TSnoc as _) i = go xs os as (i + 1)
-        go []     []            TNil         _ = report cxt (NameNotInScope x)
-        go _ _ _ _ = error "impossible"
-    go (cxt^.names) (cxt^.nameOrigin) (cxt^.types) 0
+    case lookupVar cxt x of
+      Nothing  ->  report cxt $ NameNotInScope x
+      Just res ->  pure res
 
   RPi x i a b -> do
     a <- check cxt a VU
@@ -446,6 +482,49 @@ infer cxt = \case
     let cxt' = bind x NOSource va cxt
     (t, liftVal cxt -> b) <- insert cxt' $ infer cxt' t
     pure (Lam x i a t, VPi x i va b)
+
+  REx x a b -> do
+    a <- case a of
+      Nothing -> freshMeta cxt VU
+      Just a  -> check cxt a VU
+    let ~va = eval (cxt^.vals) a
+    b <- check (bind x NOSource va cxt) b VU
+    pure (Ex x a b, VU)
+
+  RProj1 t -> do
+    (t, a) <- infer cxt t
+    case force a of
+      VEx x a b -> do
+        pure (Proj1 t, a)
+      VNe (HMeta m) sp -> do
+        a    <- eval (cxt^.vals) <$> freshMeta cxt VU
+        cod  <- freshMeta (bind "x" NOInserted a cxt) VU
+        let b ~x = eval (VDef (cxt^.vals) x) cod
+        unifyWhile cxt (VNe (HMeta m) sp) (VEx "x" a b)
+        pure (Proj1 t, a)
+      a ->
+        report cxt $ ExpectedEx (quote (cxt^.len) a)
+
+  RProj2 t -> do
+    (t, a) <- infer cxt t
+    case force a of
+      VEx x a b -> do
+        pure (Proj2 t, b (eval (cxt^.vals) (Proj1 t)))
+      VNe (HMeta m) sp -> do
+        a    <- eval (cxt^.vals) <$> freshMeta cxt VU
+        cod  <- freshMeta (bind "x" NOInserted a cxt) VU
+        let b ~x = eval (VDef (cxt^.vals) x) cod
+        unifyWhile cxt (VNe (HMeta m) sp) (VEx "x" a b)
+        pure (Proj1 t, b (eval (cxt^.vals) (Proj1 t)))
+      a ->
+        report cxt $ ExpectedEx (quote (cxt^.len) a)
+
+  RPair t u -> do
+    (t, a) <- infer cxt t
+    b <- freshMeta (bind "x" NOInserted a cxt) VU
+    let vb ~x = eval (VDef (cxt^.vals) x) b
+    u <- check cxt u (vb (eval (cxt^.vals) t))
+    pure (Pair t u, VEx "x" a vb)
 
   RHole -> do
     a <- freshMeta cxt VU

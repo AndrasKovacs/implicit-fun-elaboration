@@ -33,30 +33,51 @@ pBind    = pIdent <|> symbol "_"
 
 keyword :: String -> Bool
 keyword x =
-  x == "let" || x == "in" || x == "λ" || x == "U"
+  x == "let" || x == "in" || x == "λ" || x == "U" || x == "exists"
+  || x == "fst" || x == "snd"
 
 pIdent :: Parser Name
 pIdent = try $ do
   x <- takeWhile1P Nothing isAlphaNum <* ws
   x <$ guard (not (keyword x))
 
+pPair :: Parser Raw
+pPair = do
+  char '{'
+  t1 <- pTm
+  ts <- many (char ',' *> pTm)
+  char '}'
+  pure $ foldr1 RPair (t1:ts)
+
 pAtom :: Parser Raw
 pAtom  =
       withPos (    (RVar  <$> pIdent)
                <|> (RU    <$  char 'U')
-               <|> (RHole <$  char '_'))
+               <|> (RHole <$  char '_')
+               <|> pPair)
   <|> parens pTm
 
-pArg :: Parser (Icit, Raw)
-pArg =
-      ((Impl,) <$> (char '{' *> pTm <* char '}'))
-  <|> ((Expl,) <$> pAtom)
+pFunArg :: Parser (Icit, Raw)
+pFunArg =
+  (<|>)
+    (do
+       char '{'
+       ts <- sepBy1 pTm (char ',') <* char '}'
+       case ts of
+         [t] -> pure (Impl, t)
+         ts  -> pure (Expl, foldr1 RPair ts))
+    ((Expl,) <$> pAtom)
 
-pSpine :: Parser Raw
-pSpine = do
-  h    <- pAtom
-  args <- many pArg
-  pure $ foldl' (\t (i, u) -> RApp t u i) h args
+pApp :: Parser Raw
+pApp =
+  (RProj1 <$> (symbol "fst" *> pAtom))
+  <|>
+  (RProj2 <$> (symbol "snd" *> pAtom))
+  <|>
+  (do
+    h    <- pAtom
+    args <- many pFunArg
+    pure $ foldl' (\t (i, u) -> RApp t u i) h args)
 
 pLamBinder :: Parser (Name, Maybe Raw, Icit)
 pLamBinder =
@@ -81,13 +102,22 @@ pPiBinder =
 
 pFunExp :: Parser Raw
 pFunExp = do
-  eitherP (try (some pPiBinder)) pSpine >>= \case
+  eitherP (try (some pPiBinder)) pApp >>= \case
     Left dom -> do
       pArrow
       cod <- pTm
       pure $ foldr (\(xs, a, i) t -> foldr (\x -> RPi x i a) t xs) cod dom
     Right sp ->
       (pArrow *> (RPi "_" Expl sp <$> pTm)) <|> pure sp
+
+pEx :: Parser Raw
+pEx = do
+  (() <$ char '∃') <|> (() <$ symbol "exists")
+  x <- pIdent
+  a <- optional (char ':' *> pTm)
+  char '.'
+  b <- pTm
+  pure $ REx x a b
 
 pLet :: Parser Raw
 pLet = do
@@ -101,7 +131,7 @@ pLet = do
   pure $ RLet x (maybe RHole id ann) t u
 
 pTm :: Parser Raw
-pTm = withPos (pLam <|> pLet <|> pFunExp)
+pTm = withPos (pLam <|> pLet <|> pEx <|> pFunExp)
 
 pSrc :: Parser Raw
 pSrc = ws *> pTm <* eof

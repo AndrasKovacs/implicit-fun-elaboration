@@ -39,6 +39,10 @@ data Raw
   | RLam Name (Maybe Raw) Icit Raw   -- ^ λ x. t  or λ{x}. t with optional type annotation
                                      --   on x
   | RApp Raw Raw Icit                -- ^ t u  or  t {u}
+  | REx Name (Maybe Raw) Raw         -- ^ ∃ (x : A). B   or ∃ x. B
+  | RProj1 Raw                       -- ^ x.{1}
+  | RProj2 Raw                       -- ^ x.{2}
+  | RPair Raw Raw                    -- ^ {t, u}
   | RU                               -- ^ U
   | RPi Name Icit Raw Raw            -- ^ (x : A) → B  or  {x : A} → B
   | RLet Name Raw Raw Raw            -- ^ let x : A = t in u
@@ -47,6 +51,20 @@ data Raw
 
 deriving instance Show Raw
 
+unpos :: Raw -> Raw
+unpos = \case
+  RVar x       -> RVar x
+  RLam x a i b -> RLam x (unpos <$> a) i (unpos b)
+  RApp t u i   -> RApp (unpos t) (unpos u) i
+  REx x a b    -> REx x (unpos <$> a) (unpos b)
+  RProj1 t     -> RProj1 (unpos t)
+  RProj2 t     -> RProj2 (unpos t)
+  RPair t u    -> RPair (unpos t) (unpos u)
+  RU           -> RU
+  RPi x i a b  -> RPi x i (unpos a) (unpos b)
+  RLet x a t u -> RLet x (unpos a) (unpos t) (unpos u)
+  RSrcPos _ t  -> unpos t
+  RHole        -> RHole
 
 -- Types
 --------------------------------------------------------------------------------
@@ -139,12 +157,20 @@ data Tm
   | U                     -- ^ U
   | Check MId Tm          -- ^ Postponed checking problem, with MId problem identifier, and
                           --   Tm a fresh meta spine represnting eventual checking result.
+
+  | Ex Name Tm Tm
+  | Pair Tm Tm
+  | Proj1 Tm
+  | Proj2 Tm
+
   | Meta MId              -- ^ α
   | Skip Tm               -- ^ explicit strengthening (convenience feature for closing types)
 
 data Spine
   = SNil
   | SApp Spine ~Val Icit
+  | SProj1 Spine
+  | SProj2 Spine
 
 valsLen :: Vals -> Int
 valsLen = go 0 where
@@ -160,6 +186,8 @@ data Head
 data Val
   = VNe Head Spine
   | VPi Name Icit ~VTy (VTy -> VTy)
+  | VEx Name ~VTy (VTy -> VTy)
+  | VPair ~Val ~Val
   | VLam Name Icit ~VTy (Val -> Val)
   | VU
 

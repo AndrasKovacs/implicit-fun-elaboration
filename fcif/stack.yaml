@@ -3,3 +3,6 @@ resolver: lts-15.8
 
 packages:
 - .
+
+ghc-options:
+    "$everything": -split-sections

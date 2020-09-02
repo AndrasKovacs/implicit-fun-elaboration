@@ -14,10 +14,9 @@ par :: Int -> Int -> ShowS -> ShowS
 par p p' = showParen (p < p')
 
 -- Precedences
-atomp = 3  -- identifiers, U, ε, Tel
-appp  = 2  -- application (functions, π₁, π₂, Rec): assocs to left
-recp  = 1  -- _∷_ : assocs to right
-tmp   = 0  -- lam, let, Pi, PiTel, _▷_ : assocs to right
+atomp = 3  -- identifiers, U, Pair
+appp  = 2  -- application (function app, fst, snd)
+tmp   = 1  -- lam, let, Pi, Ex : assocs to right
 
 fresh :: [Name] -> Name -> Name
 fresh _ "_" = "_"
@@ -59,6 +58,11 @@ pi ns (Pi (fresh ns -> x) i a b)  | x /= "_" =
   piBind ns x i a . pi (x:ns) b
 pi ns t = (" → "++) . tm tmp ns t
 
+pair :: [Name] -> Tm -> Tm -> ShowS
+pair ns t u = ('{':).tm tmp ns t.go u.('}':) where
+  go (Pair t u) = (", "++).tm tmp ns t.go u
+  go t          = (", "++).tm tmp ns t
+
 tm :: Int -> [Name] -> Tm -> ShowS
 tm p ns = \case
   Var x  -> case ns !! x of
@@ -69,17 +73,23 @@ tm p ns = \case
     ("?"++).(show m++)
   Let (fresh ns -> x) a t u ->
     par tmp p $
-      ("let "++).(x++).(" : "++). tm tmp ns a . ("\n    = "++)
-      . tm tmp ns t . ("\nin\n"++) . tm tmp (x:ns) u
+      ("let "++).(x++).(" : "++). tm tmp ns a . (" = "++)
+      . tm tmp ns t . (" in "++) . tm tmp (x:ns) u
   t@App{} ->
     par appp p $ fst $ spine ns t
   Lam x i a t ->
     par tmp p $ ("λ "++) . lamBind x i . lams (x:ns) t
 
   Pi "_" Expl a b ->
-    par tmp p $ tm recp ns a . (" → "++) . tm tmp ("_":ns) b
+    par tmp p $ tm appp ns a . (" → "++) . tm tmp ("_":ns) b
   Pi (fresh ns -> x) i a b ->
     par tmp p $ piBind ns x i a . pi (x:ns) b
+
+  Ex (fresh ns -> x) a b ->
+    par tmp p $ ("∃ "++).(x++).(" : "++).tm tmp ns a.(". "++).tm tmp (x:ns) b
+  Pair t u -> pair ns t u
+  Proj1 t  -> par appp p $ ("fst "++).tm atomp ns t
+  Proj2 t  -> par appp p $ ("snd "++).tm atomp ns t
 
   Check m t -> tm p ns t
   U         -> ("U"++)

@@ -10,7 +10,7 @@ import Pretty
 
 data SpineError
   = SpineNonVar
-  -- | SpineProjection
+  | SpineProjection
   | NonLinearSpine Lvl
   deriving (Show, Exception)
 
@@ -29,6 +29,7 @@ data ElabError
   = UnifyErrorWhile Tm Tm UnifyError
   | NameNotInScope Name
   | ExpectedFunction Tm
+  | ExpectedEx Tm
   | IcitMismatch Icit Icit
   | ExpectedType Tm
 
@@ -38,18 +39,19 @@ data Err = Err {
   errPos :: Maybe SPos}
 
 instance Show Err where
-  show _ = "Error"
+  show (Err cxt err _) =
+    showError cxt err
 
 instance Exception Err
 
-report :: Cxt -> ElabError -> a
-report cxt e = throw (Err cxt e Nothing)
+report :: Cxt -> ElabError -> IO a
+report cxt e = throwIO (Err cxt e Nothing)
 
 -- | Rethrow an `Err` with source position attached.
 addSrcPos :: SPos -> IO a -> IO a
 addSrcPos p act = act `catch` \case
   Err cxt e Nothing -> throwIO (Err cxt e (Just p))
-  e                -> throwIO e
+  e                 -> throwIO e
 
 
 showError :: Cxt -> ElabError -> String
@@ -76,8 +78,8 @@ showError cxt = \case
               "Non-bound-variable value in meta spine in equation:\n\n" ++
               "  %s =? %s\n\n")
               (showTm cxt lhs) (showTm cxt rhs)
-            -- SpineProjection ->
-            --   "Projection in meta spine\n\n"
+            SpineProjection ->
+              "Projection in meta spine\n\n"
             NonLinearSpine x -> printf
               ("Nonlinear variable %s in meta spine in equation\n\n" ++
                "  %s =? %s\n\n")
@@ -93,6 +95,8 @@ showError cxt = \case
     "Name not in scope: " ++ x
   ExpectedFunction ty ->
     "Expected a function type, instead inferred:\n\n  " ++ showTm cxt ty
+  ExpectedEx ty ->
+    "Expected an existential type, instead inferred:\n\n  " ++ showTm cxt ty
   ExpectedType t ->
     "Expected a type, instead inferred type:\n\n  " ++ showTm cxt t
   IcitMismatch i i' -> printf (
