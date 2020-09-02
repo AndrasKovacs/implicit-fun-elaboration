@@ -42,8 +42,8 @@ instance Show Err where
 
 instance Exception Err
 
-report :: [Name] -> ElabError -> a
-report ns e = throw (Err ns e Nothing)
+report :: [Name] -> ElabError -> IO a
+report ns e = throwIO (Err ns e Nothing)
 
 -- | Rethrow an `Err` with source position attached.
 addSrcPos :: SPos -> IO a -> IO a
