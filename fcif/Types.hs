@@ -144,7 +144,8 @@ data Cxt = Cxt {
   cxtTypes      :: Types,
   cxtNames      :: [Name],
   cxtNameOrigin :: [NameOrigin],
-  cxtLen        :: Int}
+  cxtLen        :: Int,
+  cxtPos        :: SPos}
 
 instance Show Cxt where show = show . cxtNames
 

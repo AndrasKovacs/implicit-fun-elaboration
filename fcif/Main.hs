@@ -1,9 +1,7 @@
 
 module Main where
 
-import Text.Printf
 import Control.Exception
-import System.Exit
 import System.Environment
 
 import Types
@@ -22,20 +20,6 @@ helpMsg = unlines [
   "  elab   : read & elaborate expression from stdin, print elaboration output",
   "  nf     : read & elaborate expression from stdin, print its normal form",
   "  type   : read & elaborate expression from stdin, print its (normal) type"]
-
-displayError :: String -> Err -> IO a
-displayError file (Err cxt err (Just (SPos (SourcePos path (unPos -> linum) (unPos -> colnum))))) = do
-  let lnum = show linum
-      lpad = map (const ' ') lnum
-  printf "%s:%d:%d:\n" path linum colnum
-  printf "%s |\n"    lpad
-  printf "%s | %s\n" lnum (lines file !! (linum - 1))
-  printf "%s | %s\n" lpad (replicate (colnum - 1) ' ' ++ "^")
-  printf "%s\n\n" (showError cxt err)
-  exitSuccess
-displayError file err@(Err cxt _ Nothing) = do
-  print err
-  exitSuccess
 
 mainWith :: IO [String] -> IO (Raw, String) -> IO ()
 mainWith getOpt getTm = do
@@ -98,7 +82,7 @@ test = unlines [
   "  (vfoldr : {A}{B : Nat → U}(f : {n} → A → B n → B (suc n))(n : B zero)",
   "            → {n} → Vec A n → B n).",
 
-  -- List in terms of Vec
+  -- Define List in terms of Vec.
   -- List functions are usually definable as eta-expansions of Vec functions,
   -- thanks to ∃ elaboration.
   "let List : U → U = λ A. ∃ n. Vec A n in",
@@ -171,9 +155,11 @@ test = unlines [
   "let A7 = choose id auto in",
   "let A9 : ({A} → (A → A) → List A → A) → IdTy",
   "    = λ f. f (choose id) ids in",
+
   "let A10 = poly id in",
   "let A11 = poly (λ x. x) in",
   "let A12 = id poly (λ x. x) in",
+
   "let C1 = length ids in",
   "let C2 = tail ids in",
   "let C3 : IdTy = head ids in",
@@ -185,8 +171,10 @@ test = unlines [
   "let C8 : _ → IdTy = λ (g : {A} → List A → List A → A). g (single id) ids in",
   "let C9 = map poly (single id) in",
   "let C10 = map head (single ids) in",
+
   "let D1 = app poly id in",
   "let D2 = revapp id poly in",
+
   "let E2 =",
   "  λ (h : Nat → {A} → A → A)(k : {A} → A → List A → A)(lst : List ({A} → Nat → A → A)).",
   "  k (λ x. h x) lst in",

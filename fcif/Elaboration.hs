@@ -22,12 +22,12 @@ import Errors
 --------------------------------------------------------------------------------
 
 emptyCxt :: Cxt
-emptyCxt = Cxt VNil TNil [] [] 0
+emptyCxt = Cxt VNil TNil [] [] 0 (SPos $ initialPos "(stdin)")
 
 -- | Add a bound variable.
 bind :: Name -> NameOrigin -> VTy -> Cxt -> Cxt
-bind x o ~a (Cxt vs tys ns no d) =
-  Cxt (VSkip vs) (TBound tys a) (x:ns) (o:no) (d + 1)
+bind x o ~a (Cxt vs tys ns no d pos) =
+  Cxt (VSkip vs) (TBound tys a) (x:ns) (o:no) (d + 1) pos
 
 -- | Add a bound variable which comes from surface syntax.
 bindSrc :: Name -> VTy -> Cxt -> Cxt
@@ -35,8 +35,8 @@ bindSrc x = bind x NOSource
 
 -- | Define a new variable.
 define :: Name -> VTy -> Val -> Cxt -> Cxt
-define x ~a ~t (Cxt vs tys ns no d) =
-  Cxt (VDef vs t) (TDef tys a) (x:ns) (NOSource:no) (d + 1)
+define x ~a ~t (Cxt vs tys ns no d pos) =
+  Cxt (VDef vs t) (TDef tys a) (x:ns) (NOSource:no) (d + 1) pos
 
 -- | Lift ("skolemize") a value in an extended context to a function in a
 --   non-extended context.
@@ -331,8 +331,8 @@ insert cxt act = act >>= \case
 
 check :: Cxt -> Raw -> VTy -> IO Tm
 check cxt topT ~topA = case (topT, force topA) of
-  (RSrcPos p t, a) -> do
-    addSrcPos p (check cxt t a)
+  (RSrcPos p t, a) ->
+    check (cxt & pos .~ p) t a
 
   (RLam x ann i t, VPi x' i' a b) | i == i' -> do
     ann <- case ann of
@@ -415,7 +415,7 @@ inferTop cxt = \case
     pure (Lam x i a t, VPi x i va b)
 
   RSrcPos p t ->
-    addSrcPos p $ inferTop cxt t
+    inferTop (cxt & pos .~ p) t
 
   RLet x a t u -> do
     a <- check cxt a VU
@@ -439,8 +439,8 @@ lookupVar cxt x =
 
 infer :: Cxt -> Raw -> IO (Tm, VTy)
 infer cxt = \case
-  RSrcPos p t -> do
-    addSrcPos p $ infer cxt t
+  RSrcPos p t ->
+    infer (cxt & pos .~ p) t
 
   RU -> pure (U, VU)
 

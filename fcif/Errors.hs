@@ -1,6 +1,8 @@
 module Errors where
 
 import Control.Exception
+import Lens.Micro.Platform
+import System.Exit
 import Text.Printf
 
 import Types
@@ -35,24 +37,27 @@ data ElabError
 
 data Err = Err {
   errCxt :: Cxt,
-  errErr :: ElabError,
-  errPos :: Maybe SPos}
+  errErr :: ElabError}
 
 instance Show Err where
-  show (Err cxt err _) =
-    showError cxt err
+  show (Err cxt err) = showError cxt err
 
 instance Exception Err
 
 report :: Cxt -> ElabError -> IO a
-report cxt e = throwIO (Err cxt e Nothing)
+report cxt e = throwIO (Err cxt e)
 
--- | Rethrow an `Err` with source position attached.
-addSrcPos :: SPos -> IO a -> IO a
-addSrcPos p act = act `catch` \case
-  Err cxt e Nothing -> throwIO (Err cxt e (Just p))
-  e                 -> throwIO e
-
+displayError :: String -> Err -> IO a
+displayError file (Err cxt err) = do
+  let SPos (SourcePos path (unPos -> linum) (unPos -> colnum)) = cxt^.pos
+  let lnum = show linum
+      lpad = map (const ' ') lnum
+  printf "%s:%d:%d:\n" path linum colnum
+  printf "%s |\n"    lpad
+  printf "%s | %s\n" lnum (lines file !! (linum - 1))
+  printf "%s | %s\n" lpad (replicate (colnum - 1) ' ' ++ "^")
+  printf "%s\n\n" (showError cxt err)
+  exitSuccess
 
 showError :: Cxt -> ElabError -> String
 showError cxt = \case
