@@ -44,4 +44,4 @@ source-dirs: .
 executable:
   main: Main.hs
   ghc-options:
-    - -O2 -fllvm
+    - -O
