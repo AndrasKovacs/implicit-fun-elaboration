@@ -76,7 +76,7 @@ parseOpts src =
 
 helpMsg :: String
 helpMsg = unlines [
-  "usage: fcif [--help] COMMAND [--show-insertions]",
+  "usage: mstt [--help] COMMAND [--show-insertions]",
   "  mstt always reads an expression from standard input. Thus, you can use e.g.",
   "  \"cat file.mstt | mstt COMMAND\" as a way of processing \"file.mstt\".",
   "",
