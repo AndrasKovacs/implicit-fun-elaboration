@@ -1,4 +1,2 @@
 
-Sources and implementation of the ICFP 2020 paper "Elaboration with First-Class Implicit Function Types" by András Kovács. 
-
-[Paper](paper.pdf), [implementation](fcif).
+A small implementation of multi-stage dependently typed programming. See this for a demo: https://youtu.be/ove4TQsXemY
