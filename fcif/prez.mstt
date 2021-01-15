@@ -1,0 +1,312 @@
+
+{-
+-- 2LTT : staging
+--   2lTT + extra stuff : different version of monomorphization
+
+-- bunch of notes of 2LTT (not yet anything about layout)
+--   layout control (Rust-like mono, levity-polymorphism-like solution)
+
+-- 2LTT
+------------------------------------------------------------
+
+   Uᵢ
+
+   A   :   U i  then   ^A : U(i+1)
+   <_> :   a : A   then <a> : ^A
+   [_] :   a : ^A  then [a] : A
+
+   every eliminator, type former, constructor stays on the same level
+
+-}
+
+-- countable stages
+--  level 0       : runtime
+--  level (suc _) : compile time
+
+let U0 = U 0 in
+let U1 = U 1 in
+
+let id : (A : U0) → A → A
+  = λ A x. x in
+
+-- "inline" identity
+let id : (A : ^U0) → ^[A] → ^[A]           -- $(A) in TH
+  = λ A x. x in
+
+let test : U0 = [id <U0> <U0>] in
+
+-- "inline" composition
+let comp : {A B C : ^U0} → (^[B] → ^[C]) → (^[A] → ^[B]) → ^[A] → ^[C]
+  = λ f g x. f (g x) in
+
+let test1 : U0 = [comp (id <U0>) (id <U0>) <U0>] in
+
+-- if only types in U1 are of the form ^A
+--   we can already control inlining
+
+let comp2 : {A B C : ^U0} → ^([B] → [C]) → ^([A] → [B]) → ^([A] → [C])
+  = λ f g. <λ a. [f] ([g] a)> in
+
+let test2 : U0 = [comp2 <λ(x : U0). x> <λ(x : U0).x>] U0 in
+
+-- inductive type in U1
+
+-- Church Nat
+let Nat : U0 = (N : U0) → N → (N → N) → N in
+let zero : Nat = λ _ z s. z in
+let suc : Nat → Nat = λ a _ z s. s (a _ z s) in
+let addNat : Nat → Nat → Nat = λ a b N z s. a N (b N z s) s in
+let mulNat : Nat → Nat → Nat = λ a b N z s. a N z (λ z. b N z s) in
+let n5 : Nat = λ _ z s. s (s (s (s (s z)))) in
+let n10 = addNat n5 n5 in
+
+-- Church Nat₁
+let Nat₁ : U1 = (N : U1) → N → (N → N) → N in
+let zero₁ : Nat₁ = λ _ z s. z in
+let suc₁ : Nat₁ → Nat₁ = λ a _ z s. s (a _ z s) in
+let add₁ : Nat₁ → Nat₁ → Nat₁ = λ a b N z s. a N (b N z s) s in
+let n₁5 : Nat₁ = λ _ z s. s (s (s (s (s z)))) in
+let n₁10 = add₁ n₁5 n₁5 in
+
+-- let + stage poly
+-- let Nat : ∀ i. U i = (N : U i) → N → (N → N) → N
+--
+--    if I use (Nat 0) (I keep let-copy around)
+--    if I only use (Nat 1) (I can erase this definition)
+
+-- "inline" id
+-- id : {A : ^U0} → ^[A] → ^[A]
+
+-- "specialized" id
+-- id : {A : ^U0} → ^([A] → [A])  -- (we need some mechanism to share different id-s)
+
+
+-- lowering: Nat₁ → ^Nat     (in TH: Lift, method lift)
+
+let lowerNat : Nat₁ → ^Nat =
+  λ n. n (^Nat) <zero> (λ n. <suc [n]>) in
+
+let test3 : Nat = [lowerNat n₁10] in
+
+  -- n : Nat     --->    <n> : ^Nat
+  -- n : Nat₁    --->   [lowerNat n] : Nat
+
+-- "staged" exponentiation (Hello World of staging)
+let exp₁ : Nat₁ → Nat → Nat
+    = λ a b. a _ (suc zero) (λ n. mulNat n b) in
+
+let exp5 : Nat → Nat = exp₁ n₁5 in
+
+let id : {A : ^U0} → A → A = λ x. x in
+
+let foo : {A : U0} → (A → A) → A → A
+  = λ f x. f (f (f x)) in
+
+let bar = λ {A}. foo (id {A}) in
+
+let comp : {A B C : ^U0} → (B → C) → (A → B) → A → C
+  = λ f g x. f (g x) in
+
+U0
+
+-- stage inference: coercive subtyping
+--   subtyping relation at elaboration time
+
+-- U i < U (i + 1)          coe = ^_
+-- A < ^A                   coe = <_>
+-- ^A < A                   coe = [_]
+
+-- (A' < A) ∧ (∀ a'. B (coe a') < B' a')
+-- ─U i < U (i + 1)         coe = ^_
+-- A < ^A                   coe = <_>
+-- ^A < A                   coe = [_]
+
+-- (A' < A) ∧ (∀ a'. B (coe a') < B' a')
+-- ─────────────────────────────────────
+--  ((a : A) → B a) < ((a' : A') → B' a')
+
+--   coe f := λ a'. coe (f (coe a'))
+
+-- Bidir checking, change of direction: check for subtyping
+--   (metavars a big complication)
+
+-- Σ types: covariant subtyping rule
+
+-- defining isomorphism of 2LTT: A ~ ^A
+
+-- derivable isomorphisms: ^ preserves all negative type formers
+
+--  ^(A → B) ~ (^A → ^B)
+--  ^(A × B) ~ (^A × ^B)
+--  ^⊤₀      ~ ⊤₁
+
+-- Typing of Futamura projection with stage polymorphism
+-- countable stages + bounded stage polymorphism (∀ i (j ≤ i). ....)
+--    (lifting from U i to U j, if I know i ≤ j)
+
+-- STLC interpreter (stage poly)
+
+-- syntax
+-- Con : ∀ i. U i
+-- Ty  : ∀ i. U i
+-- Tm  : ∀ i. Con i → Ty i → U i
+
+-- evalCon : ∀ i (j ≤ i). Con i → U j
+-- evalTy  : ∀ i (j ≤ i). Ty  i → U j
+-- evalTm  : ∀ i (j ≤ i). {Γ : Con i}{A : Ty i} → Tm Γ A → evalCon Γ → evalTy A
+
+-- abbrev:
+--  InterpTy := ∀ i (j ≤ i). {Γ : Con i}{A : Ty i} → Tm Γ A → evalCon Γ → evalTy A
+
+-- three Futamura projections:
+-- first: given evalTm and (t : Tm₁ Γ A), return (evalTm 1 0 t)
+--     (specialize interpreter for a program)
+-- second:
+--     given evalTm, return (evalTm 1 0)
+-- third:
+--     (λ (evalTm : InterpTy). evalTm 1 0)     (stage-polymorphic argument)
+
+-- (every Futamura projection is the identity function when we erase stages)
+
+-- partial evaluation literature: weakly typed
+
+-- PE vs staging:
+
+-- partial evaluation:
+--   offline PE: reduction based only on static program annotation (~staging)
+--   online  PE: nbe + heuristics
+--              (nbe is always a valid PE implementation)
+
+-- do we need online PE if we have staging?
+--   yes! because compiler optimization is a form of online PE
+--     (opt which is not available in 2LTT, optimization which does not
+        preserve definitional 2LTT equality)
+
+{-
+- GHC optimization (online PE: heuristics about inlining/unfolding)
+   - reduction modulo weak η rule for positive types
+   - "case commutation"
+
+     fst (if b then t1 else t2) --> if b then fst t1 else fst t2
+
+     fst (if b then (t1, t2) else t3) --> if b then t1 else t3
+
+     -- if (if b then t1 else t2) then t3 else t4
+     --   --> size increase in commutation
+     --       (t3 and t4 can be factor out in tail-called function definition)
+
+     --   (the reason for having join points in GHC)
+     --      (it's open problem to have join points with dep. types in a nice way)
+
+     way to do compilation:
+        - staging (user-controlled)
+	- optimization: the basis of opt should be NbE as well (online PE)
+	     inlining / unfolding / reduction / weak η-reductions
+
+        - supercompilation: approximate optimization modulo full η rules for
+	  positive/inductive types
+
+Staging techniques / related topics (PE literature):
+
+(ways to approximate the possibilities of online PE in a fully typed way)
+
+
+1. binding-time improvement:
+
+   - For some type find an isomorphic type which can be computed more by staging
+
+   CPS + Church encoding
+
+   Maybe : U0 → U0
+
+   ^(Maybe A) ~
+   ^((M : U0) → M → (A → M) → M) ~
+    ((M : ^U0) → ^[M] → (^A → ^[M]) → ^[M])
+
+   Maybe' : ^U0 → U1
+   Maybe' A := (M : ^U0) → ^[M] → (^[A] → ^[M]) → ^[M]
+
+2. partially static data
+
+   data Nat1 : U1 = Zero | Suc Nat1   -- fully known statically
+
+   data PSNat : U1 = Zero | Suc PSNat | Dyn Nat0  -- "online" PE on PSNat
+
+   add : PSNat → PSNat → PSNat
+   add Zero    b = b
+   add (Suc a) b = Suc (add a b)
+   add (Dyn a) b = Dyn (a + [lower b])
+
+   -- Oleg papers: staged stream fusion
+
+   -- program context may contain a bunch of runtime vars
+
+   λ xs.        run (Map ... (Filter ...) (Drop ... (Dyn xs)))
+
+    -- run function performs fusion/optimization by staging
+    -- Map, Filter, Drop : syntactic meta-level things
+    --   (Dyn stuff behaves a bit like "neutral" values)
+
+  if we have type A --> generically compute PSA
+
+    (combinatorial explosion for sum types)
+
+  data PS (A : ∀ i. U i) = S (A 1) | D (A 0)
+  data PSEither A B = Left (PS A) | Right (PS B) | Dyn (Either (A 0) (B 0))
+
+  -- N-ary sum type
+  -- (2^N subsets of constructors could get a constructor in PS version of
+  --  the type
+  (Aᵢ + Bᵢ + Cᵢ + .... Zᵢ)
+
+     -- we either know which exact constructor the value is or
+     --   we know nothing about the constructor
+
+-- Metaprogramming in more generality + tactics (using 2LTT)
+--------------------------------------------------------------------------------
+
+-- Coq: tac language, weakly typed, we have no idea whether tac output is
+-- well-formed
+-- tac programs live in a different world (elaboration optimization, evaluators,
+--  nothing can be reused in implementation between tac and core things)
+
+-- performance issue:
+--    every tac output has to be re-checked
+--    (gluing relies on elaboration ouput being written by humans)
+--       - Jason Gross (coq performance github repo)
+--       -   (better asymptotics? (more complexity, more constant factors))
+--       - Well-typed, first-class metaprogramming
+--         (1. I don't have to re-check output)
+--         (2. My metaprogram/tactic is visible to glued eval)
+--         (If I need huge local scopes: use custom data structure in
+--            the metaprogram)
+--            (don't have to compute tactics, I can keep them folded)
+
+-- What do we need for this to work? (reproduce tactic language)
+
+-- Induction on ^A  (pattern matching on syntax) (should works)
+-- Open problem: Side effects in tactics
+--    (backtracking, errors, metacontext manipulation)
+
+-- MTac : almost fully well-typed tactic language for Coq
+---  (effects are in a monad)
+
+-- problematic part: monadic traversal on HOAS
+
+--    Π (A : U0) (B : A →ʳ U0)  -->   M U0
+
+     nu  : ∀ A B. (A → M B) → M B
+     abs : ∀ A P x. P x → M (∀ (x : A). P x)   -- runtime escape checks
+
+     -- I can magically get a "bound variable" (bv : A)
+     -- recurse on (B bv)
+     -- magically re-abstract the result, get (M (A → U0)) as result
+     --   re-abstraction can fail if the bv escapes
+
+     -- ("representable" function types in ^A)
+     -- (PHOAS ?)
+     -- (ideas)
+
+-- next week: 2LTT + Memory layout stuff
+--------------------------------------------------------------------------------
+-}

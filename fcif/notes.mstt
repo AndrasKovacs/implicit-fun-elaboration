@@ -1,0 +1,163 @@
+
+
+let U0 = U 0 in
+let U1 = U 1 in
+
+let the : (A : U0) → A → A = λ A x. x in
+
+let Exp : U1 =
+    (Exp : U1)
+  → (var : Exp)
+  → (add : Exp → Exp → Exp)
+  → (mul : Exp → Exp → Exp)
+  → Exp in
+
+-- data Exp = Var | Add Exp Exp | Mul Exp Exp
+--   eval : Exp → ^Nat → ^Nat
+
+-- eval Var         n = n
+-- eval (Add e1 e2) n = eval e1 n + eval e2 n
+-- eval (Mul e1 e2) n = eval e1 n + eval e2 n
+
+-- in interpretation, we can get runtime errors (division by zero, head [])
+--  staged eval for a language with runtime failure
+
+-- eval Var 0 is an error (ad-hoc illustration)
+
+-- eval : Exp → ^Nat → ^(Maybe Nat)
+
+-- runtime zero check only for Var1
+
+-- eval Var1        n = <if n == 0 then Just n else Nothing>
+-- eval Var2        n = <Just n>
+-- eval (Add e1 e2) n = <(+) <$> [eval e1 n] <*> [eval e1 n]>
+
+-- error checking pollutes every expression
+
+-- eval (Add Var2 Var2) n  -- statically known to not fail
+--    --> <Just (n + n)>
+
+--  Maybe': error continuation is in the meta level
+
+
+let Nat : U0 = (N : U0) → N → (N → N) → N in
+let zero : Nat = λ _ z s. z in
+let suc : Nat → Nat = λ a _ z s. s (a _ z s) in
+let addNat : Nat → Nat → Nat = λ a b N z s. a N (b N z s) s in
+let mulNat : Nat → Nat → Nat = λ a b N z s. a N z (λ z. b N z s) in
+let n5 : Nat = λ _ z s. s (s (s (s (s z)))) in
+let n10 = addNat n5 n5 in
+
+let Nat₁ : U1 = (N : U1) → N → (N → N) → N in
+let zero₁ : Nat₁ = λ _ z s. z in
+let suc₁ : Nat₁ → Nat₁ = λ a _ z s. s (a _ z s) in
+let add₁ : Nat₁ → Nat₁ → Nat₁ = λ a b N z s. a N (b N z s) s in
+let n₁5 : Nat₁ = λ _ z s. s (s (s (s (s z)))) in
+let n₁10 = add₁ n₁5 n₁5 in
+
+let var : Exp = λ E v a m. v in
+let add : Exp → Exp → Exp = λ e1 e2 E v a m. a (e1 E v a m) (e2 E v a m) in
+let mul : Exp → Exp → Exp = λ e1 e2 E v a m. m (e1 E v a m) (e2 E v a m) in
+
+let foo = λ f x. suc (f x) in
+
+let Maybe : U0 → U0
+  = λ A. (Maybe : U0)(Just : A → Maybe)(Nothing : Maybe) → Maybe in
+
+let Just : {A : ^U0} → A → Maybe A
+  = λ a M j n. j a in
+
+let Nothing : {A : ^U0} → Maybe A
+  = λ M j n. n in
+
+let bind : {A B : ^U0} → Maybe A → (A → Maybe B) → Maybe B
+  = λ {A}{B} ma f M j n. ma M (λ a. f a M j n) n in
+
+let liftM2 : {A B C : U0} → (A → B → C) → Maybe A → Maybe B → Maybe C
+  = λ f ma mb. bind ma (λ a. bind mb (λ b. Just (f a b))) in
+
+let eval : Exp → Nat → Maybe Nat
+  = λ e. e (Nat → Maybe Nat)
+    Just
+    (λ e1 e2 n. liftM2 addNat (e1 n) (e2 n))
+    (λ e1 e2 n. liftM2 mulNat (e1 n) (e2 n))
+    in
+
+let eval2 : Exp → Nat → Maybe Nat
+  = λ e n. e (Maybe Nat)
+      (Just n)
+      (liftM2 addNat)
+      (liftM2 mulNat) in
+
+let Maybe1 : ^U0 → U1
+  = λ A. (Maybe : ^U0)(Just : A → Maybe)(Nothing : Maybe) → Maybe in
+
+-- ^(Maybe A) ≃ ^((M : U0) → (A → M) → M → M)
+--            ≃ (M : ^U0) → (^A → ^M) → ^M → ^M
+
+let Just1 : {A : ^U0} → A → Maybe1 A
+  = λ a M j n. j a in
+
+let Nothing1 : {A : ^U0} → Maybe1 A
+  = λ M j n. n in
+
+let bind1 : {A B : ^U0} → Maybe1 A → (A → Maybe1 B) → Maybe1 B
+  = λ {A}{B} ma f M j n. ma M (λ a. f a M j n) n in
+
+let liftM21 : {A B C : ^U0} → (A → B → C) → Maybe1 A → Maybe1 B → Maybe1 C
+  = λ f ma mb. bind1 ma (λ a. bind1 mb (λ b. Just1 (f a b))) in
+
+let eval3 : Exp → Nat → Maybe1 Nat
+  = λ e n. e (Maybe1 Nat)
+     (Just1 n)            -- never throws
+                          -- (Var2 constructors)
+     (liftM21 addNat)
+     (liftM21 mulNat) in
+
+let liftMaybe : {A : ^U0} → Maybe A → Maybe1 A
+  = λ x. x in
+
+let nonzero : Nat → Maybe Nat
+  = λ n. n _ Nothing (λ _. Just n) in
+
+let eval4 : Exp → Nat → Maybe1 Nat
+  = λ e n.
+    -- let foo : Maybe Nat = nonzero n in
+    e (Maybe1 Nat)
+     (nonzero n)
+     (liftM21 addNat)
+     (liftM21 mulNat) in
+
+let eval5 : Exp → Nat → Maybe Nat
+  = λ e n. n (Maybe Nat)
+       Nothing
+       (λ _. Just (e Nat n addNat mulNat)) in
+
+-- e (Maybe1 <Nat>)
+--      (nonzero n)
+--      (liftM21 addNat)
+--      (liftM21 mulNat) in
+
+let e : Exp = add var (mul var (mul var var)) in
+
+let test1 : Nat → Maybe Nat
+  = λ n. eval e n in
+
+let test2 : Nat → Maybe Nat
+  = λ n. eval2 e n in
+
+let test3 : Nat → Maybe Nat
+  = λ n. eval3 e n in
+
+let test4 : Nat → Maybe Nat
+  = λ n. eval4 e n in
+
+let test5 : Nat → Maybe Nat
+  = λ n. eval5 e n in
+
+let lowerNat : Nat₁ → Nat
+  = λ n. n _ zero suc in
+
+let test6 : Nat = lowerNat (add₁ n₁5 (let x : Nat = n10 in n₁5)) in
+
+test1
