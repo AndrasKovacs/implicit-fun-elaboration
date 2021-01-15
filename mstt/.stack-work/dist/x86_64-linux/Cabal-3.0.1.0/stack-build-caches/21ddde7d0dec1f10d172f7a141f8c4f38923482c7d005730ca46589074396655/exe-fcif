@@ -1,0 +1,44 @@
+/home/kutta/home/Dropbox/src/implicit-fun-elab/fcif/Main.hs:
+  hash: 4fbdddd23c500348318bbe9b70fe249e5cf321470ae4ba6b19a1e9645220cf50
+  size: 6164
+  modtime: 1599140245
+/home/kutta/home/Dropbox/src/implicit-fun-elab/fcif/Zonk.hs:
+  hash: 1233110668ac1474f031cd33cf4e68e19beae20184efcc90498ff2e2b1981190
+  size: 2242
+  modtime: 1599137456
+/home/kutta/home/Dropbox/src/implicit-fun-elab/fcif/Elaboration.hs:
+  hash: 1c23cd62b8be1ceb9a07922e6c62a64841705f16f8b05dd2f9f5993b2aed4324
+  size: 18454
+  modtime: 1599140191
+/home/kutta/home/Dropbox/src/implicit-fun-elab/fcif/fcif.cabal:
+  hash: cd6fad8b787eade96075994bd8e2f70ad9de0378a9d968e320a9d75b86c4cb79
+  size: 1208
+  modtime: 1599137434
+/home/kutta/home/Dropbox/src/implicit-fun-elab/fcif/Errors.hs:
+  hash: 59aad8f1674416fe3962337830afb1d3f533ef327c1da262aadabc79ad413c17
+  size: 3321
+  modtime: 1599139837
+/home/kutta/home/Dropbox/src/implicit-fun-elab/fcif/Types.hs:
+  hash: 0b4548c822c9a69479650cb14a68b4c3c3095eccc077e09c9b0b4a9e65b8bc46
+  size: 6146
+  modtime: 1599139803
+/home/kutta/home/Dropbox/src/implicit-fun-elab/fcif/Evaluation.hs:
+  hash: 95527cb82f62ef20d441917d2ee622a8f543ec5ec1527ef6cb0749ac1357725d
+  size: 2483
+  modtime: 1599137456
+/home/kutta/home/Dropbox/src/implicit-fun-elab/fcif/Pretty.hs:
+  hash: 4f6a72cf6ffa997b290c099f43e3ac227fddee4c235b641b36be610077da8902
+  size: 3804
+  modtime: 1599137456
+/home/kutta/home/Dropbox/src/implicit-fun-elab/fcif/ElabState.hs:
+  hash: a0dedf1074b4473a9a8c229c3de947588b83278ce774cc7cb282c328dbf166ab
+  size: 1558
+  modtime: 1599137456
+/home/kutta/home/Dropbox/src/implicit-fun-elab/fcif/package.yaml:
+  hash: cbffba5e0bd7de5702235aafb59369c894985f75ae6041193f38bcc65e3e8df7
+  size: 814
+  modtime: 1599140313
+/home/kutta/home/Dropbox/src/implicit-fun-elab/fcif/Parser.hs:
+  hash: 8b657ef794b7d05f2d0f5daa4116a714726afefe64b2d94054aedd4bf307c848
+  size: 3495
+  modtime: 1599137456

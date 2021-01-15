@@ -1,0 +1,47 @@
+
+name:        fcif
+version:     0.1.0.0
+license:     BSD3
+category:    Language
+description: "Implementation of \"Elaboration with First-Class Implicit Function Types\""
+
+default-extensions:
+- BangPatterns
+- DeriveAnyClass
+- ExplicitNamespaces
+- FlexibleContexts
+- FlexibleInstances
+- FunctionalDependencies
+- LambdaCase
+- MultiParamTypeClasses
+- PatternSynonyms
+- RankNTypes
+- ScopedTypeVariables
+- StandaloneDeriving
+- Strict
+- TemplateHaskell
+- TupleSections
+- TypeApplications
+- ViewPatterns
+
+ghc-options:
+- -Wall
+- -Wno-name-shadowing
+- -Wno-missing-signatures
+- -Wno-unused-do-bind
+- -Wno-unused-matches
+- -Wno-partial-type-signatures
+- -Wno-type-defaults
+
+dependencies:
+- base >= 4.7 && < 5
+- containers
+- megaparsec
+- microlens-platform
+
+source-dirs: .
+
+executable:
+  main: Main.hs
+  ghc-options:
+    - -O
