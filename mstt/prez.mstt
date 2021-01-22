@@ -310,3 +310,478 @@ Staging techniques / related topics (PE literature):
 -- next week: 2LTT + Memory layout stuff
 --------------------------------------------------------------------------------
 -}
+
+
+
+
+
+{-
+
+- 1. monomorphization (Rust-like)     (less powerful, cleaner syntax, aggressive transformation of data by compiler)
+                                         every runtime type is canonical
+- 2. levity polymorphism (GHC-like)   (more powerful (runtime polymorphism), heavier syntax, more limited data transform)
+                                         there are neutral runtime types
+
+
+-- MonoTT : 2LTT + monomorphization
+--------------------------------------------------------------------------------
+
+-- (2 version:
+--    1. only uniform types allowed
+--    2. lightweight type size calculus)
+
+# Overview
+
+- Types are layouts
+- Compile time language is full TT
+- Runtime language is simple type theory
+ (assume two levels)
+
+Runtime:
+  _→_, _×_, _+_, ⊤, ⊥, ADTs, *no universe*
+
+  - every runtime type is canonical in elab output!
+  - we could define layouts in a naive parametric way:
+
+    _→_ : closure
+    _×_ : flat product
+    _+_ : tagged union
+    ⊤, ⊥: erased
+      (parametric layout computation)
+      - non-parametric type former: layout of type former depends on the layout of the parameter types
+
+  - but we don't have to! Since types are fully known, we can easily *compute*
+    layouts non-trivially, or let the user specify fine-grained unboxing/packing/padding.
+
+Comptime:
+  - Full TT + ^U0 + usual lifting
+  - ^U0 is just a name, not a lifting, since there's no U0
+
+    similar to ^U0 in usual 2LTT
+
+  ^_         : Ty₀ Γ → Ty₁ Γ
+  (<_>, [_]) : Ty₀ Γ ~ Tm₁ Γ ^U0    -- type iso
+  (<_>, [_]) : Tm₀ Γ A ~ Tm₁ Γ ^A   -- term iso
+   Bool type₀    --->  <Bool> : U1
+   A : ^U0       --->  [A]    : type₀
+
+usual stuff:
+  id  : (A : ^U0) → ^[A] → ^[A]
+  map : (A B : ^U0) → (^[A] → ^[B]) → ^(List [A]) → ^(List [B])
+
+
+higher-rank poly works with static functions
+
+  poly : ((A : ^U0) → ^[A] → ^[A]) → ^(Bool × Int)            (C++ template templates)
+  poly = λ f. <([f <Bool> <True>], [f <Int> <0>])>
+
+(higher rank functions work, if higher-rank things are statically known)
+
+polymorphic recursion also works, is unfolded at comptime:
+
+  Vec : Nat₁ → ^U0 → ^U0
+  Vec 0       A = <⊤>
+  Vec (suc n) A = <[A] × [Vec n A]>
+
+  -- (works in Rust/C++ templates)
+  map : (n : Nat₁)(A B : ^U0) → (^[A] → ^[B]) → ^(Vec n [A]) → ^(Vec n [B])
+  map 0       A B f as = <tt>
+  map (suc n) A B f as = <[f <fst [as]>], [map n A B f <snd [as]>]>
+
+-- what happens if I use static identity type?
+--   p : Id (^U0) A B ?
+
+--     after staging, we have equality reflection for (Id ^U0 x y)
+--        p : Id ^U0 A B   --->  after staging  A is definitionally equal to B
+
+--   (Schröder-Bernstein transport rule)
+--
+
+
+1. Only uniform types
+------------------------------------------------------------
+
+- every type is uniform, some are boxed, some are unboxed
+- ADTs come in boxed and padded flavor
+- padded type recursion must be guarded by boxed type
+- relatively easy to represent, better than Rust/GHC   (similar to Sixten)
+
+  (higher kinds:)
+    (λ A. <List [A]>) : ^U0 → ^U0     (recover higher kinds)
+    (alternative: add a language of runtime kinds)
+
+    elaboration feature : List --> λ A. <List [A]>
+
+    (case expression + recursion in runtime language)
+
+    ( we could have mutation, exceptions, partiality + side effects in the runtime language )
+         ( Id ^(Nat₀ → Nat₀) f g )
+
+
+  padded Bool type where
+    true  : Bool
+    false : Bool
+
+  boxed Ref (A type) type where
+    box : A → Ref A               (0 tag bits)
+
+  padded List (A type) type where
+    nil  : List A
+    cons : A → Ref (List A) → List A
+
+  boxed List (A type) type where
+    nil  : List A
+    cons : A → List A → List A
+
+  map : {A B : ^U0} → (^[A] → ^[B]) → ^(List [A]) → ^(List [B])
+  map f = letrec go <nil>       = <nil>
+                 go <cons a as> = <cons [f <a>] [go <as>]>
+          in go
+
+- binding-time-improvement, partially static data:
+
+  Maybe' : ^U0 → U1
+  Maybe' A := (M : ^U0) → (^[A] → ^[M]) → ^[M] → ^[M]        (static Church-encoded data)
+
+  data Env (A : ^U0) : U1 where
+    nil  : Env A
+    snoc : Env A → ^[A] → Env A
+
+(we can still write well-typed staged STLC interpreter)
+    cannot write well-typed staged interp for poly/dependent language)
+
+Raw functions: can still capture static variables!
+
+  f : Bool₁ → Nat₁ → ^(Nat →ʳ Nat)
+  f True  x = <λʳ y. [lower x] + y>
+  f False x = <λʳ y. [lower x] * y>      (after staging "x" capture disappears)
+
+   Γ, x : A ⊢ t : B     Γ ⊢ A type₀    Γ ⊢ B type₀    Γ only has vars in type₁
+   ──────────────────────────────────────────────────────────────────────────
+                          Γ ⊢ λʳ x. t : A →ʳ B
+
+
+- obvious layout optimization: padded sum tags unpacked into outer constructor tags
+  (type formers are not parametric w.r.t. layout)
+
+   padded Bool = true | false      (1 bit)
+
+  "Ref Bool" has the same layout as
+
+  boxed Bool type where
+    true  : Bool
+    false : Bool
+
+  padded Maybe A   (1 tag bit + space for A)
+
+  List (Maybe Bool):
+
+  Naive:
+    cons     | maybetag | booltag | tail
+      1 w        1 w       1 w      1 w        (4 words)       (cons (just true) xs)
+
+  Optimized:
+    cons      |  maybetag | booltag  | <unused> |   tail
+      32bit       1bit      1bit      30bit        64bit      (2 words)
+
+  List (Maybe (Ref A))
+    cons | maybetag | <unused> | payload | tail
+     32        1       31          64       64         (3 words)
+
+Limitations:
+
+- data Val = VVar Int | VApp Val Val | VLam (Val → Val)
+
+   data Foo = Con (Int64 × Ref Int64) (Int64 × Ref Int64)
+          --> (ptrs and non-pointers grouped)
+
+
+   VLam metadata : ctr tags + num of ptr, num of non-ptrs in objects
+
+   VLam | ptr (to closure)
+    64    64
+
+   unpack closure into constructor:
+
+     runtime obj type | VLam tag | num of ptrs | num of non-ptrs |             <closure data>
+         x bits          y bits        ...           ...             some number of ptrs and non-ptrs
+
+   unpack: arrays
+     (small generic object: stores known-sized ADT constructors)
+     (large generic object: dynamically sized objects fit if we unpack them)
+
+   f : Bool → Bool → Bool → Bool
+   f = λ x y z. ...
+
+   let g = f True       --> closure with 1 arg             g False -->
+   let g = f True False --> closure with 2 args            g False -->
+
+   GHC: - constructor tags are "magic" parts of runtime object layouts
+        - instead: ctor tags should be user unboxed data
+	- (have 32 bits of user unboxed space is small generic runtime objects)
+
+
+- arrays and closures are always boxed, cannot be unpacked
+  (workaround for unpacking arrays: generic object containing a boxed array and an unboxed one)
+
+- unpacking is always uniform-sized: (cons (just (box true)) xs) has the same size as (cons nothing xs)
+
+   List (Maybe (Ref Bool))
+   cons (just (box true)) xs
+   cons nothing xs
+   -- sizes are the same!
+   -- "non-uniform unpacking"
+
+-- suggestion: restrictions:
+   1. only raw function + padded types (hw specification)
+   2. only raw function, not closures
+        (is there a feature for making defunctionalized closures more convenient?)
+
+   closure construction in Rust/C++:
+
+      λ {....} (....). body     (support for closures with a *single* constructor)
+      defunctionalization:      (compiling different lambdas with different captures to a sum type of closures)
+                                 (application: switching on all different closures)
+
+
+-- Non-uniform types
+------------------------------------------------------------
+
+runtime types are "abstract size"-indexed
+
+size = exact | bounded | unbounded
+
+   exact < bounded < unbounded
+   _⊔_ : size → size → size            (least upper bounds)
+                                       (exact ⊔ bounded = bounded)
+				       (_ ⊔ unbounded   = unbounded)
+
+  Closures:
+  _⇒_   : ty exact → ty exact → ty unbounded
+  _×_   : ∀ i j. ty i → ty j → ty (i ⊔ j)
+  _+_   : ∀ i j. ty i → ty j → ty (i ⊔ j ⊔ bounded)
+  ⊤, ⊥  : ty exact
+  Ref   : ∀ i. ty i → ty exact
+  Pad   : ty bounded → ty exact
+  Array : ty exact → ty unbounded
+
+     (weird: SoA transformation during compilation)
+     Array (Ref Int64 × Int64)  --> (2 arrays, one for ptrs, one for non-ptrs)
+     (Array is just a primitive object, handled by GC specially so that we don't have to unzip)
+
+  + iso-recursive, size-polymorphic types with parameters
+    recursion guarded by Ref
+
+  (alternatively: generic sums, products instead of ×/+, or even SOP (sums-of-products))
+    + type fixpoint)
+    (easier for generics in static stage)
+
+  type List {i} (A type i) : type (i ⊔ bounded) where
+    nil  : List A
+    cons : A → Ref (List A) → List A
+
+         -- i ⊔ (i ⊔ bounded) = i ⊔ bounded
+         -- exact ⊔ i ⊔ bounded = i ⊔ bounded
+
+  UsualList A := Ref (List A)   -- A can be anything
+  RustList A  := Pad (List A)   -- Pad is only well-typed if A is not unbounded
+
+  if Bool is (ty exact) then List Bool is ty bounded
+
+  Pad (List Bool) is exact
+  Ref (List Bool) is exact
+
+  List (Maybe (Ref Int))
+  List (Pad (Maybe (Ref Int)))
+
+
+- we still don't have runtime parametricity (Pad, Ref are non-parametric)
+
+- idea: can we have restricted quantifier in the runtime language
+
+   RefΠ : (A : Ty(0,i) Γ) → Ty(0, exact) (Γ, x : Ref A) → Ty (0, exact) Γ
+
+   -- this does not work: Ref is not parametric type former (in layouts)
+   --    (we need a more magical "Ref" type which is parametric (genericity overhead))
+
+  -- branch with 0, 1, 2
+
+  type Tree {i} (A : type i) : type (i ⊔ bounded) where
+    leaf : A → Tree A
+    node : Maybe (Ref (Tree A)) → Maybe (Ref (Tree A)) → Tree A
+
+  -- node only stores the child if we have a just (bitmask-like solution!)
+
+  -- maybe with generic magic: bitmasked arrays in constructors (Data.HashMap in Haskell: has this)
+
+
+-- Levity polymorphism
+--------------------------------------------------------------------------------
+
+(making it up as I go)
+
+- We have full TT both on runtime and compile time + layout control
+
+U1 : U1                -- type-in-type
+
+Rep    : U1
+erased : Rep
+ref    : Rep
+_×_    : Rep → Rep → Rep
+Word   : Rep
+
+U0 : Rep → U0 erased   -- type-in-type
+
+    Π0 : {r₁ r₂ : Tm₁ Γ Rep}(A : Ty(0, r₁) Γ) → Ty(0, r₂) (Γ, A) → Ty (0, ref)
+
+    -- layout polymorphism, but no layout dependency (yet)
+
+id : (A : U0 ref) → A → A
+id = λ A x. x
+
+-- layout poly id
+id : (r : Rep)(A : ^(U0 r)) → ^[A] → ^[A]
+id = λ r A x. x
+
+
+-- vague idea with levity polymorphism:
+
+-- Sigma type with layout dependency, such that layout dependency is statically known, but first projection isn't
+--   Sigma type, first projection has rep Word, statically known layout dependency
+
+   (first projection is 64 bit word)
+
+   ΣWord64 :
+      (r : Tm (Γ, w : Word64₁)) → Ty (0, r) (Γ, w : Word64₁) → Ty (0, ΣWord64 r)
+
+      _,_ : (t₁ : Tm (0, Word) Γ Word64₀) → ? → Tm (0, ΣWord64) Γ (ΣWord64 B)
+
+       -- runtime term with type Word64₀
+       -- I need Word64₁
+
+       -- There is no conversion from Bool₀ to Bool₁
+       --                           Word64₀ to Word64₁    (in an arbitrary context)
+                            (closed evaluation: Word64₀ cannot be neutral)
+
+   f : Word64₁ → Rep
+   f = λ x. ArrayRep ref (x * x)
+
+
+
+   (idea: custom RTS objects)
+     (static layout dependency --> custom RTS code)
+     (user can write new RTS objects (which get GCd, etc.))
+      (we still don't need dep. type-passing polymorphism)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Extra layout control/optimization features
+------------------------------------------------------------
+
+Assumption: function arg & return types have uniform size (simplifies stack manip, GC, calling conventions)
+
+Possible layout computations:
+  - 1. normalize to SOP (sum of products): minimize tag sizes
+    - layoutOf ((⊤ + ⊤) + ⊤) = layoutOf (⊤ + (⊤ + ⊤))
+    - compute number of tag bits
+    - flatten nested case expressions
+
+  - 2. don't normalize to SOP: minimize "case" expression sizes
+
+    - constructor tags
+
+
+
+
+
+
+
+
+  Ref A    : Ty₀ Γ
+  *_, box  : A ~ Ref A
+  refst    : Ref (A × B) → Ref A   fst *p = *(refst p)
+  (refsnd) : Ref (A × B) → Ref B   snd *p = *(refsnd p)   -- we can skip refsnd if we don't want interior ptrs
+
+
+
+
+
+
+
+
+Since there's no Σ, primitive ADTs or
+Recursion must be guarded by Ref (uniformity restriction)
+
+  data List (A : ^U0) : ^U0 where
+    nil  : ^[List A]
+    cons : ^[A] → ^(Ref [List A]) → ^[List A]
+
+  Bool : ^U0
+  Bool = <⊤ + ⊤>
+
+  Maybe : ^U0 → ^U0
+  Maybe A = <⊤ + [A]>
+
+  -- layout of ⊤ + ⊤ + ⊤?
+               List Bool
+
+-}
