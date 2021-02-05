@@ -8,7 +8,8 @@
 -- Note on Unicode: lambdas can be written as `\` or `λ` and function arrows as
 -- `->` or `→`.
 
--- Existential types can be written as ∃ or as exists x. A.
+-- Existential types can be written as ∃ x : A. B or as exists x : A.B
+-- The type annotation can be omitted in both cases, like ∃ x. B
 
 -- Church natural numbers. We use these instead of postulating them
 -- because we want some Nat computation for defining Vec functions.
