@@ -14,6 +14,7 @@
 *.vtc
 *.ptb
 *.bbl
+*.lock
 comment.cut
 
 *.hi

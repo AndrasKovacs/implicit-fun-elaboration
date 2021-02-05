@@ -1,0 +1,332 @@
+
+Polymorphic subtyping + subtyping + "first-class" polymorphism + existential (DH feature)
+
+-- (demo: first-class poly + ∀ + first-class ∃)
+
+------------------------------------------------------------
+
+bidirectional elaboration     (previously: check + infer + insert + insert')
+                              (check + infer + subtyping coercion)
+
+
+-- 1st version: basic bidirectional elaboration
+--   (no subtyping for Π, "monomorphic instantiation")
+--------------------------------------------------------------------------------
+
+TT ::= U | (x : A) → B | {x : A} → B | λ x. t | λ {x}. t | t u | t {u}
+
+
+check Γ (λ x. t)   ((x : A) → B) = λ x. check (Γ, x : A) t B
+check Γ (λ {x}. t) ({x : A} → B) = λ {x}. check (Γ, x : A) t B
+check Γ t          ({x : A} → B) = λ {x}. check (Γ, x : A) t B         -- lambda insertion
+
+check Γ t A = do
+  (t, B) ← infer Γ t
+  coe B A t             -- coe can fail, part of elaboration ("coercive" subtyping)
+
+
+infer Γ x =
+  (x, lookup x Γ)
+
+infer Γ ((x : A) → B) = do
+  A ← check Γ A U
+  B ← check (Γ, x : A) B U
+  (((x : A) → B), U)
+
+infer Γ ({x : A} → B) = do
+  A ← check Γ A U
+  B ← check (Γ, x : A) B U
+  (({x : A} → B), U)
+
+infer Γ (t u) = do
+  (t, A) ← infer Γ t
+  t ← coe A ((x : α) → β x) t      -- α, β are fresh metas
+  u ← check Γ u α
+  (t u, β u)
+
+infer Γ (t {u}) = do
+  (t, A) ← infer Γ t
+  t ← coe A ({x : α} → β x) t      -- α, β are fresh metas
+  u ← check Γ u α
+  (t {u}, β u)
+
+infer Γ U =
+  (U, U)
+
+coe A ({x : B} → C x) t = λ {x}. coe A (C x) t
+coe ({x : A} → B x) C t = coe (B α) C (t {α})     -- α fresh
+coe A               B t = unify A B; t            -- return t
+
+  -- unify (List α) (List ({A} → A → A))
+  --   poly instantiation "guarded" by rigid type formers  (see also: Guarded impredicative polymorphism paper)
+
+
+-- example:
+
+    coe ({A : U} → A → A) ({B : U} → B → B) id =
+       λ {B : U}. coe ({A : U} → A → A) (B → B) id  =
+       λ {B : U}. coe (α B → α B) (B → B) (id {α B}) =
+       λ {B : U}. id {B}                                    -- α := λ B. B
+
+    -- (coe is just eta-expansion)
+    --   (potential optimization: omit identity coercions)
+
+ -- second case as relational rule:
+
+     ──────────────────────────
+     ∀ t. ({x : A} → B x) ≤ B t
+
+ -- third case
+
+      (A ≠ {x : _} → _)
+     ──────────────────
+           A ≤ A
+
+
+-- elaboration examples:
+
+id : {A : U} → A → A
+id = λ x. x
+
+infer Γ (id true):
+
+    we infer {A : U} → A → A for id
+    coe ({A : U} → A → A) ((x : α) → β x) id =
+       id {γ} : γ → γ   -- α := γ,   β := λ _. γ
+    (γ := Bool)
+
+infer Γ (id {Bool})
+
+    coe ({A : U} → A → A) ({x : α} → β x) id
+      = (λ {A}. id {A})
+
+    return ((λ {A}. id {A}) {Bool})
+
+
+-- Adding poly instantiation
+--------------------------------------------------------------------------------
+
+modify check + coe (postponing)
+
+...
+check Γ t A | A ‌‌≠ α = do
+  (t, B) ← infer Γ t
+  coe B A t             -- coe can fail, part of elaboration ("coercive" subtyping)
+
+
+coe A ({x : B} → C x) t = λ {x}. coe A (C x) t
+coe ({x : A} → B x) C t = coe (B α) C (t {α})     -- α fresh
+coe A B t | B ≠ α       = unify A B; t
+
+-- B is always the "expected" type
+-- A is always an "inferred" type
+
+-- λ (f : {A : U} → A → A).  (f true, f zero)
+
+-- not possible: infer something to be polymorphic based on how the thing is used
+
+-- λ f. (f true, f zero)      -- f : ?
+
+-- polymorphic argument inference problem, (only supported to some degree in MLF)
+
+-- (TODO: what exactly does MFL support)
+
+-- In MLF:
+-- g : ({A} → A → A) → Bool
+-- λ f. g f   checks
+
+let f : _ → Bool
+    f = λ x. x
+       coe α Bool x   --  α could be ({A : U} → A) or Bool
+
+-- "impredicative" polymorphism
+
++ if there are stuck check/coe-s after elaboration, we solve them by forgetting about blocking conditions
+
+  (generalization of Quick Look impredicativity)
+
+     QL: unit of postponing ("horizon" of postponing) is single nested neutral spine   (e.g.    f t u (g x y z))
+         1. traverse the nested neutral spine using "preprocessing" algorithm, tries to find poly instantiations
+	 2. traverse the same thing again ("normal" elaboration algo), making use of poly instantiations
+
+     Postponing: traverses exactly once, but in flexible order
+
+  Just : {A} → A → Maybe A
+
+  foo : Maybe ({A} → A → A)
+  foo = Just (λ x. x)
+
+    infer type for (Just (λ x. x))
+       -- with mono instantiation: Maybe (α → α)
+       -- unify (Maybe ({A} → A → A)) (Maybe (α → α))     -- fails
+
+    Just {α} : α → Maybe α
+
+    check (λ x. x) α     -- blocked checking
+
+    inferred type for (Just (λ x. x)) is Maybe α
+
+    unify (Maybe ({A} → A → A)) (Maybe α)    --> α := {A} → A → A
+
+    unblocked checking:
+       check (λ x. x) ({A} → A → A) = λ {A} x. x     OK
+
+    -- implementation of postponed check:
+
+        when postponing:
+	  - I create a fresh meta which stands for the eventual result
+
+           check (λ x. x) α     --> fresh β stands for result of (check (λ x. x) α)
+                                -- remember β is the representative of this check problem
+
+           when I unblock:
+	     - perform the check
+	     - unify the checking result with the representative meta
+
+
+-- Mono instantiation + polymorphic subtyping
+--------------------------------------------------------------------------------
+
+-- very similar Krishnawami & Dunfield (2013)
+--   (differences: dep. types, some polymorphic instantiation, we don't have precisely scoped metas, no let generalization)
+
+-- Start with basic elab, modify coe:
+
+coe A ({x : B} → C x) t = λ {x}. coe A (C x) t
+coe ({x : A} → B x) C t = coe (B α) C (t {α})
+coe ((x : A) → B x) ((x : A') → B' x) t = λ (a' : A'). coe (B (coe A' A x)) (B' a') (t (coe A' A x))
+coe A ((x : A') → B' x) t = unify ((x : α) → β x) A; coe ((x : α) → β x) ((x : A') → B' x) t
+coe ((x : A) → B x) B'  t = --||--  (symmetric)
+coe A B t = unify A B; t
+
+-- examples:
+
+   (Bool → Bool) ≤ (({A} → A) → Bool)
+       ({A} → A) ≤ Bool
+       Bool ≤ Bool       OK
+
+-- issues with poly subtyping:
+    - System F it's kind of OK: a) language is total b) polymorphism is erased from runtime   (no cost to implicit stuff)
+
+    - strict partial lang: coercive subtyping with function: can turn a loop into a value
+            (already an issue in GHC, subtyping will be removed at some point (9.0/9.2))
+
+    - computationally relevant implicit function: implicit stuff influences operational sem
+
+
+-- Poly instantiation + poly subtyping
+--------------------------------------------------------------------------------
+
+postponing case in "check"
+
+coe A ({x : B} → C x) t = λ {x}. coe A (C x) t
+coe ({x : A} → B x) C t = coe (B α) C (t {α})
+coe ((x : A) → B x) ((x : A') → B' x) t = λ (a' : A'). coe (B (coe A' A a')) (B' a') (t (coe A' A a'))
+coe A ((x : A') → B' x) t = unify ((x : α) → β x) A; coe ((x : α) → β x) ((x : A') → B' x) t
+coe ((x : A) → B x) B' t | B' ≠ α = --||--  (symmetric)
+coe A B t | B ≠ α = unify A B; t
+
+
+-- Poly instantiation + poly subtyping + ∃ types
+--------------------------------------------------------------------------------
+
+-- Demo: poly instantiation (with postponing solution) + ∃
+
+∃ types: Sigma with implicit first projection
+
+(∃ (A : U). A)          "Any" type
+
+let foo : ∃ (A : U). A
+    foo = true
+
+let foo : ∃ (A : U). A
+    foo = (Bool, true)
+
+let List : U → U
+    List = λ A. ∃ (n : Nat). Vec n A
+
+as : List Bool
+
+mapNot : {n} → Vec n Bool → Vec n Bool
+
+mapNot as           in elab output: mapNot {as.1} (as.2)
+
+--------------------------------------------------------------------------------
+
+extend check, infer, coe
+
+check Γ (t, u) (∃ x : A. B) = do
+  t ← check Γ t A
+  u ← check Γ u (B t)
+  ret (t, u)
+
+check Γ t (∃ x : A. B) = do
+  t ← check Γ t (B α)           -- insert pairing with fresh α
+  ret (α, t)
+
+
+infer Γ (t.1) = do
+   -- infer type for t , coerce it to fresh ∃ type
+
+infer Γ (t.2) = do
+   -- infer type for t , coerce it to fresh ∃ type
+
+infer Γ (t, u) =
+  (same way as inference for Σ pairing)
+
+infer Γ (λ {x}. t)
+  (same way as inference for λ x. t)
+
+
+-- insertion on right
+coe A ({x : B} → C x) t = λ {x}. coe A (C x) t
+coe A (∃ x : A. B x)  t = (α, coe A (B α) t)
+
+-- insertion on left
+coe ({x : A} → B x) C t = coe (B α) C (t {α})
+coe (∃ x : A. B x) C t  = coe (B (t.1)) C (t.2)
+
+-- structural rule for Π
+coe ((x : A) → B x) ((x : A') → B' x) t = λ (a' : A'). coe (B (coe A' A a')) (B' a') (t (coe A' A a'))
+coe A ((x : A') → B' x) t = unify ((x : α) → β x) A; coe ((x : α) → β x) ((x : A') → B' x) t
+coe ((x : A) → B x) B' t | B' ≠ α = --||--  (symmetric)
+
+-- flex/neutral case
+coe A B t | B ≠ α = unify A B; t
+
+-- limitations
+------------------------------------------------------------
+
+  vmap : {A B} → (A → B) → {n} → Vec n A → Vec n B
+
+
+  map : {A B} → (A → B) → List A → List B
+  map = vmap                               --
+
+
+
+    (List A → List B) = (∃ n. Vec n A) → List B
+
+-- to make this work (two rules: currying on left/right)
+
+
+-- currying rules:
+
+coe A ((p : ∃ x : B. C x) → D p) t = ...   (use uncurrying to insert λ {x : B}, and work under it)
+coe ((p : ∃ x : A. B x) → C p) D t = ...   (use currying to insert an application to {α : A})
+
+-- we can only "group" arguments, not reorder them
+
+
+-- what about implicit transporting over definitional isomorphisms?
+
+-- unification modulo currying, flipping, Skolemization  (definitional isomorphisms)
+--   (elaboration module these?)
+
+-- f : Bool → Nat → Nat
+-- coe f : Nat → Bool → Nat
+
+-- two-level TT:   ^A ~ A  is used in coercion
+
+-- Practical feature set: no subtyping, postponing solution for poly instantiation
+--------------------------------------------------------------------------------
