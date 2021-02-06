@@ -363,7 +363,7 @@ check cxt topT ~topA = case (topT, force topA) of
 
   (RPair t u, VEx x a b) -> do
     t <- check cxt t a
-    u <- check cxt u (b (VVar (cxt^.len)))
+    u <- check cxt u (b (eval (cxt^.vals) t))
     pure $ Pair t u
 
   (t, VEx x a b) -> do
