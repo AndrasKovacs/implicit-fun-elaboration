@@ -15,7 +15,7 @@ import Zonk
 
 helpMsg :: String
 helpMsg = unlines [
-  "usage: fcif [--help|elab|nf|type]",
+  "usage: fcif-existentials [--help|elab|nf|type]",
   "  --help : display this message",
   "  elab   : read & elaborate expression from stdin, print elaboration output",
   "  nf     : read & elaborate expression from stdin, print its normal form",
