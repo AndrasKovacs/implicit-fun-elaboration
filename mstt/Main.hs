@@ -147,6 +147,10 @@ main = mainWith (parseOpts =<< (unwords <$> getArgs)) parseStdin
 main' :: String -> String -> IO ()
 main' args src = mainWith (parseOpts args) ((,src) <$> parseString src)
 
+test2 = unlines [
+  "λ (x : U 0) (x : U 0) . x"
+  ]
+
 
 test1 = unlines [
   "λ (Bool  : U 0)",

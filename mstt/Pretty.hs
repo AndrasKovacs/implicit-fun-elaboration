@@ -21,9 +21,9 @@ tmp   = 0  -- lam, let, Pi, _▷_ : assocs to right
 
 fresh :: [Name] -> Name -> Name
 fresh ns "_" = "_"
-fresh ns x | elem x ns = go (1 :: Int) where
-  go n | elem (x ++ show n) ns = go (n + 1)
-       | otherwise             = x ++ show n
+fresh ns x | elem x ns || elem ('*':x) ns = go (1 :: Int) where
+  go n | elem (x ++ show n) ns || elem ('*':x ++ show n) ns = go (n + 1)
+       | otherwise = x ++ show n
 fresh ns x = x
 
 bracket :: ShowS -> ShowS
@@ -97,12 +97,12 @@ tm p ns = go p where
       let (t', _, isAtom) = spine ns t
       in par p (if isAtom then atomp else appp) t'
 
-    Lam x i Inserted a t ->
+    Lam (fresh ns -> x) i Inserted a t ->
       showingInsertions $ \case
         True  -> par p tmp $ ("λ "++) . lamBind x i . lams (x:ns) t
         False -> case t of Lam{} -> par p tmp $ ("λ"++) . lams (x:ns) t
                            _     -> go p t
-    Lam x i _ a t ->
+    Lam (fresh ns -> x) i _ a t ->
       par p tmp $ ("λ "++) . lamBind x i . lams (x:ns) t
 
     Pi "_" Expl a b ->
