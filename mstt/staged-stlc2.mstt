@@ -1,0 +1,113 @@
+
+
+let U0 = U 0 in
+let U1 = U 1 in
+
+let the0 : (A : U0) → A → A = λ _ x. x in
+let the1 : (A : U1) → A → A = λ _ x. x in
+
+let Pair : U1 → U1 → U1
+  = λ A B. (Pair : U1)(pair : A → B → Pair) → Pair in
+
+let pair : {A B : U1} → A → B → Pair A B
+  = λ a b Pair pair. pair a b in
+
+let fst : {A B : U1} → Pair A B → A
+  = λ p. p _ (λ a b. a) in
+
+let snd : {A B : U1} → Pair A B → B
+  = λ p. p _ (λ a b. b) in
+
+let Top : U1
+  = (Top : U1)(tt : Top) → Top in
+
+let tt : Top
+  = λ Top tt. tt in
+
+let Bot : U0
+  = (Bot : U0) → Bot in
+
+--------------------------------------------------------------------------------
+
+let Ty : U1
+  = (Ty : U1)(ι : Ty)(fun : Ty → Ty → Ty) → Ty in
+
+let ι : Ty
+  = λ Ty ι fun. ι in
+
+let fun : Ty → Ty → Ty
+  = λ A B Ty ι fun. fun (A Ty ι fun) (B Ty ι fun) in
+
+let Con : U1
+  = (Con : U1)(nil : Con)(snoc : Con → Ty → Con)→ Con in
+
+let nil : Con
+  = λ Con nil snoc. nil in
+
+let snoc : Con → Ty → Con
+  = λ Γ A Con nil snoc. snoc (Γ Con nil snoc) A in
+
+let Var : Con → Ty → U1
+  = λ Γ A. (Var : Con → Ty → U1)
+           (vz : {Γ:Con}{A:Ty} → Var (snoc Γ A) A)
+           (vs : {Γ:Con}{A B:Ty} → Var Γ A → Var (snoc Γ B) A)
+           → Var Γ A in
+
+let vz : {Γ:Con}{A:Ty} → Var (snoc Γ A) A
+  = λ Var vz vs. vz in
+
+let vs : {Γ:Con}{A B:Ty} → Var Γ A → Var (snoc Γ B) A
+  = λ x Var vz vs. vs (x Var vz vs) in
+
+let Tm : Con → Ty → U1
+  = λ Γ A. (Tm : Con → Ty → U1)
+           (var : {Γ:Con}{A:Ty} → Var Γ A → Tm Γ A)
+	   (lam : {Γ:Con}{A B:Ty} → Tm (snoc Γ A) B → Tm Γ (fun A B))
+	   (app : {Γ:Con}{A B:Ty} → Tm Γ (fun A B) → Tm Γ A → Tm Γ B)
+	   → Tm Γ A in
+
+let var : {Γ:Con}{A:Ty} → Var Γ A → Tm Γ A
+  = λ x Tm var lam app. var x in
+
+let lam : {Γ:Con}{A B:Ty} → Tm (snoc Γ A) B → Tm Γ (fun A B)
+  = λ t Tm var lam app. lam (t Tm var lam app) in
+
+let app : {Γ:Con}{A B:Ty} → Tm Γ (fun A B) → Tm Γ A → Tm Γ B
+  = λ t u Tm var lam app. app (t Tm var lam app) (u Tm var lam app) in
+
+--------------------------------------------------------------------------------
+
+let Tyᴱ : Ty → U0
+  = λ A. A _ Bot (λ A B. A → B) in
+
+let Conᴱ : Con → U1
+  = λ Γ. Γ _ Top (λ Γ A. Pair Γ (Tyᴱ A)) in
+
+let Varᴱ : {Γ:Con}{A:Ty} → Var Γ A → Conᴱ Γ → Tyᴱ A
+  = λ {Γ}{A} x. x
+      (λ Γ A. Conᴱ Γ → Tyᴱ A)
+      (snd)
+      (λ xᴱ Γᴱ. xᴱ (fst Γᴱ)) in
+
+let Tmᴱ : {Γ:Con}{A:Ty} → Tm Γ A → Conᴱ Γ → Tyᴱ A
+  = λ {Γ}{A} t Γᴱ. t
+      (λ Γ A. Conᴱ Γ → Tyᴱ A)
+      Varᴱ
+      (λ tᴱ Γᴱ α. tᴱ (pair Γᴱ α))
+      (λ tᴱ uᴱ Γᴱ. (tᴱ Γᴱ) (uᴱ Γᴱ))
+      Γᴱ in
+
+--------------------------------------------------------------------------------
+
+-- t : Tm nil ((ι ⇒ ι) ⇒ (ι ⇒ ι))
+let t : Tm nil (fun (fun ι ι) (fun ι ι))
+  = lam (lam
+        (app (var (vs vz)) (app (var (vs vz))
+        (app (var (vs vz)) (app (var (vs vz))
+        (app (var (vs vz)) (app (var (vs vz))
+	(var vz)))))))) in
+
+let example : (Bot → Bot) → (Bot → Bot)
+  = Tmᴱ t tt in
+
+example
